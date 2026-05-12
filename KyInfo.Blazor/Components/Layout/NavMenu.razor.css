@@ -1,0 +1,126 @@
+.navbar-toggler {
+    appearance: none;
+    cursor: pointer;
+    width: 3.5rem;
+    height: 2.5rem;
+    color: white;
+    position: absolute;
+    top: 0.5rem;
+    right: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.45rem;
+    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem rgba(255, 255, 255, 0.06);
+}
+
+.navbar-toggler:checked {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.top-row {
+    height: 3.5rem;
+}
+
+.navbar-brand {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #f8fafc !important;
+}
+
+.nav-brand-caption {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(248, 250, 252, 0.45);
+}
+
+/* Bootstrap Icons 字体图标：不要用固定宽高覆盖 */
+.nav-link .bi {
+    display: inline-block;
+    margin-right: 0.65rem;
+    font-size: 1.05rem;
+    opacity: 0.88;
+    vertical-align: -0.12em;
+}
+
+.nav-item {
+    font-size: 0.9rem;
+    padding-bottom: 0.2rem;
+}
+
+.nav-item:first-of-type {
+    padding-top: 0.75rem;
+}
+
+.nav-item:last-of-type {
+    padding-bottom: 1rem;
+}
+
+.nav-item ::deep .nav-link {
+    color: rgba(248, 250, 252, 0.78);
+    background: transparent;
+    border: none;
+    border-radius: 0.55rem;
+    min-height: 2.65rem;
+    display: flex;
+    align-items: center;
+    line-height: 1.35;
+    width: 100%;
+    padding: 0.45rem 0.65rem;
+    margin: 0.12rem 0;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.nav-item ::deep a.active {
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.35), rgba(59, 130, 246, 0.12));
+    color: #fff;
+    box-shadow: inset 3px 0 0 #60a5fa;
+}
+
+.nav-item ::deep .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.nav-item ::deep button.nav-link {
+    color: rgba(248, 250, 252, 0.65);
+}
+
+.nav-item ::deep button.nav-link:hover {
+    color: #fecaca;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.nav-scrollable {
+    display: none;
+}
+
+.navbar-toggler:checked ~ .nav-scrollable {
+    display: block;
+}
+
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+
+    .nav-scrollable {
+        display: block;
+        height: calc(100vh - 3.5rem);
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+    }
+
+    .nav-scrollable::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .nav-scrollable::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.35);
+        border-radius: 999px;
+    }
+}

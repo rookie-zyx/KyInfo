@@ -1,0 +1,204 @@
+@inherits LayoutComponentBase
+@rendermode InteractiveServer
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<div class="page app-shell">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main class="app-main">
+        <header class="app-header">
+            <div class="app-header-left">
+                <div class="app-header-kicker">KyInfo</div>
+                <div>
+                    <div class="app-title">@AppTitle</div>
+                    <div class="app-subtitle">@AppSubtitle</div>
+                </div>
+            </div>
+            <div class="app-header-meta">
+                @if (string.IsNullOrWhiteSpace(userName))
+                {
+                    <div class="app-user-pill" title="当前登录用户">
+                        <span class="bi bi-person-circle app-user-pill-icon" aria-hidden="true"></span>
+                        <span class="app-user-pill-label">@DisplayUserName</span>
+                    </div>
+                }
+                else
+                {
+                    <a class="app-user-pill app-user-pill-link" href="account" title="打开我的账户">
+                        <span class="bi bi-person-circle app-user-pill-icon" aria-hidden="true"></span>
+                        <span class="app-user-pill-label">@DisplayUserName</span>
+                    </a>
+                }
+            </div>
+        </header>
+
+        <section class="app-content">
+            <div class="app-content-inner">
+                @Body
+            </div>
+        </section>
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    [Inject]
+    private IJSRuntime JS { get; set; } = default!;
+
+    private string? userName;
+
+    /// <summary>
+    /// 当前页路由键（首段路径）。布局在导航时不会自动带新参数，需用 LocationChanged + Uri 解析更新。
+    /// </summary>
+    private string _routeKey = "";
+
+    private string DisplayUserName => string.IsNullOrWhiteSpace(userName) ? "未登录" : userName!;
+
+    private string AppTitle => ResolveAppTitle(_routeKey);
+
+    private string AppSubtitle => ResolveAppSubtitle(_routeKey);
+
+    private static string GetRouteKeyFromLocation(string location)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+        {
+            return "";
+        }
+
+        if (Uri.TryCreate(location, UriKind.Absolute, out var absolute))
+        {
+            return FirstPathSegment(absolute.AbsolutePath);
+        }
+
+        // 相对地址，如 account 或 /account?x=1
+        var trimmed = location.TrimStart('/').Split('?', 2)[0].TrimEnd('/');
+        return FirstPathSegment("/" + trimmed);
+    }
+
+    private static string FirstPathSegment(string absolutePath)
+    {
+        var trimmed = absolutePath.Trim('/').Split('?', 2)[0];
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return "";
+        }
+
+        var seg = trimmed.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return seg.Length > 0 ? seg[0].ToLowerInvariant() : "";
+    }
+
+    private static string ResolveAppTitle(string routeKey)
+    {
+        return routeKey switch
+        {
+            "" => "考研信息系统",
+            "account" => "我的档案",
+            "admin" => "管理后台",
+            "schools" => "院校查询",
+            "majors" => "专业查询",
+            "scorelines" => "分数线查询",
+            "scoreline-trends" => "分数线趋势",
+            "recommendations" => "智能志愿推荐",
+            "ai-chat" => "AI 助手",
+            "recruitinfos" => "招生简章",
+            "login" => "登录",
+            "register" => "注册",
+            _ => "考研信息系统"
+        };
+    }
+
+    private static string ResolveAppSubtitle(string routeKey)
+    {
+        return routeKey switch
+        {
+            "" => "院校 · 专业 · 分数线 · 志愿推荐，一站式查询与决策辅助",
+            "account" => "资料、密码与本人成绩维护",
+            "admin" => "用户管理与 Excel 批量导入",
+            "schools" => "检索院校信息",
+            "majors" => "检索专业信息",
+            "scorelines" => "历年分数线检索",
+            "scoreline-trends" => "分数线变化趋势",
+            "recommendations" => "智能志愿推荐",
+            "ai-chat" => "对话式辅助",
+            "recruitinfos" => "招生简章检索",
+            "login" => "登录以使用完整功能",
+            "register" => "注册新账号",
+            _ => "院校 · 专业 · 分数线 · 志愿推荐，一站式查询与决策辅助"
+        };
+    }
+
+    protected override void OnInitialized()
+    {
+        _routeKey = GetRouteKeyFromLocation(Navigation.Uri);
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        // 子页面切换时布局有时只更新 Body，用当前 Uri 再同步一次标题路由键
+        SyncRouteFromNavigation();
+    }
+
+    private void SyncRouteFromNavigation()
+    {
+        var next = GetRouteKeyFromLocation(Navigation.Uri);
+        if (!string.Equals(next, _routeKey, StringComparison.Ordinal))
+        {
+            _routeKey = next;
+        }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _routeKey = GetRouteKeyFromLocation(e.Location);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 兜底：部分环境下 LocationChanged 不会驱动布局重绘，渲染后再用 Navigation.Uri 对齐顶栏标题
+        var routeBefore = _routeKey;
+        SyncRouteFromNavigation();
+        var routeChanged = !string.Equals(routeBefore, _routeKey, StringComparison.Ordinal);
+
+        try
+        {
+            var nextUser = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_userName");
+            var userChanged = !string.Equals(nextUser, userName, StringComparison.Ordinal);
+            if (userChanged)
+            {
+                userName = nextUser;
+            }
+
+            if (routeChanged || userChanged)
+            {
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            if (userName is not null)
+            {
+                userName = null;
+                StateHasChanged();
+            }
+            else if (routeChanged)
+            {
+                StateHasChanged();
+            }
+        }
+    }
+}

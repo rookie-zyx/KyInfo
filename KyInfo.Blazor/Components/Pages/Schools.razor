@@ -1,0 +1,184 @@
+@page "/schools"
+@using KyInfo.Contracts.Schools
+@using KyInfo.Blazor.ApiClient
+@inject SchoolsApiClient SchoolsApi
+
+<PageTitle>院校查询</PageTitle>
+
+<RequireLogin>
+<div class="section-header">
+    <div class="section-header-title">
+        <h1>院校查询</h1>
+        <span class="pill-badge">按名称 / 省份 / 层次快速筛选院校</span>
+    </div>
+    <div class="text-muted small section-tagline">
+        支持模糊搜索与组合条件，点击列表查看院校详情与链接。
+    </div>
+    </div>
+
+<div class="card card-soft mb-3">
+    <div class="card-header card-soft-header">
+        <strong>筛选条件</strong>
+        <span class="ms-2 text-muted small">
+            当前条件：
+            @if (string.IsNullOrWhiteSpace(keyword) && string.IsNullOrWhiteSpace(province) && string.IsNullOrWhiteSpace(levelTag))
+            {
+                <span class="pill-badge pill-badge-muted">全部院校</span>
+            }
+            else
+            {
+                @if (!string.IsNullOrWhiteSpace(keyword))
+                {
+                    <span class="pill-badge me-1">关键词：@keyword</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(province))
+                {
+                    <span class="pill-badge me-1">省份：@province</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(levelTag))
+                {
+                    <span class="pill-badge me-1">层次：@levelTag</span>
+                }
+            }
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small text-muted">关键词</label>
+                <input class="form-control" placeholder="名称 / 简称，如 \"大学\" / \"工大\"" @bind="keyword" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">省份</label>
+                <input class="form-control" placeholder="如 北京、江苏" @bind="province" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">层次标签</label>
+                <input class="form-control" placeholder="如 985 / 211 / 双一流" @bind="levelTag" />
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary" @onclick="LoadSchools" disabled="@loading">
+                    @(loading ? "查询中..." : "开始查询")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card card-soft h-100">
+            <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>院校列表</strong>
+                    <span class="ms-2 text-muted small">
+                        共 @(schools?.Count ?? 0) 所院校
+                    </span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (loading)
+                {
+                    <div class="p-3 text-muted">加载中...</div>
+                }
+                else if (schools is null || !schools.Any())
+                {
+                    <div class="p-3 text-muted">暂无数据，请调整筛选条件后重试。</div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var s in schools)
+                        {
+                            <li class="list-group-item list-group-item-action" @onclick="@(() => LoadDetail(s.Id))" style="cursor: pointer;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@s.Name</strong>
+                                        @if (!string.IsNullOrEmpty(s.ShortName))
+                                        {
+                                            <span class="text-muted">（@s.ShortName）</span>
+                                        }
+                                        <div class="text-muted small">@s.Province / @s.City</div>
+                                    </div>
+                                    <div class="text-end small">
+                                        <div><span class="pill-badge pill-badge-muted">@s.LevelTag</span></div>
+                                        <div class="text-muted mt-1">@s.Type · @s.Property</div>
+                                    </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-soft h-100">
+            <div class="card-header card-soft-header">
+                <strong>院校详情</strong>
+            </div>
+            <div class="card-body">
+                @if (selected is null)
+                {
+                    <p class="text-muted mb-0">在左侧列表中选择一所院校，这里将展示其详细信息与官网链接。</p>
+                }
+                else
+                {
+                    <h5 class="card-title mb-1">
+                        @selected.Name @(string.IsNullOrEmpty(selected.ShortName) ? "" : $"（{selected.ShortName}）")
+                    </h5>
+                    <p class="text-muted small mb-3">@selected.Province / @selected.City</p>
+                    <p class="card-text mb-1">
+                        <span class="pill-badge me-1">@selected.LevelTag</span>
+                        <span class="pill-badge pill-badge-muted me-1">@selected.Type</span>
+                        <span class="pill-badge pill-badge-muted">@selected.Property</span>
+                    </p>
+                    @if (!string.IsNullOrEmpty(selected.Website))
+                    {
+                        <p class="card-text mt-3">
+                            官网：
+                            <a href="@selected.Website" target="_blank" rel="noopener">@selected.Website</a>
+                        </p>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+</RequireLogin>
+
+@code {
+    private bool loading;
+    private string keyword = "";
+    private string province = "";
+    private string levelTag = "";
+
+    private List<SchoolListItemDto>? schools;
+    private SchoolDetailDto? selected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSchools();
+    }
+
+    private async Task LoadSchools()
+    {
+        loading = true;
+        selected = null;
+        try
+        {
+            schools = await SchoolsApi.SearchAsync(keyword, province, levelTag);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadDetail(int id)
+    {
+        selected = await SchoolsApi.GetByIdAsync(id);
+    }
+
+}

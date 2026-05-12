@@ -1,0 +1,235 @@
+@page "/ai-chat"
+@using KyInfo.Contracts.AiChat
+@using KyInfo.Blazor.ApiClient
+@inject AiChatApiClient AiChatApi
+@inject IJSRuntime JS
+
+
+<PageTitle>AI 助手</PageTitle>
+
+<RequireLogin>
+    <div class="ai-chat-page">
+        <header class="ai-chat-hero">
+            <div class="ai-chat-hero-glow" aria-hidden="true"></div>
+            <div class="ai-chat-hero-inner">
+                <div class="ai-chat-hero-text">
+                    <div class="ai-chat-hero-kicker">
+                        <span class="ai-chat-hero-dot" aria-hidden="true"></span>
+                        KyInfo 智能问答
+                    </div>
+                    <h1 class="ai-chat-hero-title">AI 助手</h1>
+                    <p class="ai-chat-hero-desc">
+                        院校、专业、分数线与备考问题，用自然语言提问即可。回复由后端通过 OpenAI 兼容接口生成；请在本机配置 <code>Ai:ApiKey</code>。
+                    </p>
+                    <div class="ai-chat-hero-tags">
+                        <span class="ai-chat-tag">院校匹配</span>
+                        <span class="ai-chat-tag">国家线</span>
+                        <span class="ai-chat-tag">复习规划</span>
+                    </div>
+                </div>
+                <div class="ai-chat-hero-card" aria-hidden="true">
+                    <div class="ai-chat-hero-card-inner">
+                        <span class="bi bi-stars ai-chat-hero-icon"></span>
+                        <span class="ai-chat-hero-card-label">对话式辅助</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="ai-chat-panel">
+            <div class="ai-chat-panel-head">
+                <span class="ai-chat-panel-title">对话</span>
+                <span class="ai-chat-panel-hint">Shift + Enter 换行</span>
+            </div>
+
+            <div class="ai-chat-messages">
+                @if (messages.Count == 0 && !loading)
+                {
+                    <div class="ai-chat-empty">
+                        <p class="ai-chat-empty-title">开始你的第一条提问</p>
+                        <p class="ai-chat-empty-sub">点击下方示例快速填入，或直接输入你的问题。</p>
+                        <div class="ai-chat-chips" role="group" aria-label="示例问题">
+                            @foreach (var hint in SuggestedPrompts)
+                            {
+                                <button type="button" class="ai-chat-chip" @onclick="() => ApplyHint(hint)">@hint</button>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var m in messages)
+                    {
+                        <div class="ai-chat-row @(m.Role == "user" ? "ai-chat-row-user" : "ai-chat-row-assistant")">
+                            <div class="ai-chat-avatar" aria-hidden="true">
+                                @if (m.Role == "user")
+                                {
+                                    <span class="bi bi-person-fill"></span>
+                                }
+                                else
+                                {
+                                    <span class="bi bi-stars"></span>
+                                }
+                            </div>
+                            <div class="ai-chat-bubble-wrap">
+                                <div class="ai-chat-meta">@(m.Role == "user" ? "你" : "助手")</div>
+                                <div class="ai-chat-bubble">
+                                    <div class="ai-chat-text">@m.Content</div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (loading)
+                    {
+                        <div class="ai-chat-row ai-chat-row-assistant">
+                            <div class="ai-chat-avatar ai-chat-avatar-pulse" aria-hidden="true">
+                                <span class="bi bi-stars"></span>
+                            </div>
+                            <div class="ai-chat-bubble-wrap">
+                                <div class="ai-chat-bubble ai-chat-bubble-pending">
+                                    <span class="ai-chat-typing">
+                                        <span></span><span></span><span></span>
+                                    </span>
+                                    <span class="ai-chat-typing-label">正在组织回答</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="ai-chat-composer">
+                <label class="ai-chat-label" for="ai-chat-input">输入消息</label>
+                <div class="ai-chat-composer-row">
+                    <textarea id="ai-chat-input"
+                              class="ai-chat-textarea"
+                              rows="3"
+                              @bind="inputText"
+                              placeholder="例如：计算机专硕近年国家线变化趋势？"></textarea>
+                    <button type="button" class="ai-chat-send" @onclick="SendAsync" disabled="@loading" title="发送">
+                        @if (loading)
+                        {
+                            <span class="ai-chat-send-spinner" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <span class="bi bi-send-fill" aria-hidden="true"></span>
+                        }
+                        <span class="ai-chat-send-text">@(loading ? "发送中" : "发送")</span>
+                    </button>
+                </div>
+                @if (error is not null)
+                {
+                    <div class="ai-chat-error" role="alert">
+                        <span class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></span>
+                        @error
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</RequireLogin>
+
+@code {
+    private static readonly string[] SuggestedPrompts =
+    {
+        "计算机专硕国家线近年趋势？",
+        "如何根据分数选冲刺和保底院校？",
+        "考研报名流程里要注意什么？"
+    };
+
+    private readonly List<ChatTurn> messages = new();
+    private string inputText = "";
+    private string? error;
+    private bool loading;
+    private bool _pendingScroll;
+
+    private void ApplyHint(string text)
+    {
+        inputText = text;
+    }
+
+    private async Task SendAsync()
+    {
+        if (loading)
+        {
+            return;
+        }
+
+        var userText = inputText.Trim();
+        if (string.IsNullOrEmpty(userText))
+        {
+            return;
+        }
+
+        error = null;
+        inputText = "";
+        messages.Add(new ChatTurn { Role = "user", Content = userText });
+        loading = true;
+        _pendingScroll = true;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new ApiException(System.Net.HttpStatusCode.Unauthorized, "登录状态已失效，请重新登录后再试。");
+            }
+
+            var payload = new AiChatRequestDto
+            {
+                Messages = messages.Select(m => new AiChatMessageDto { Role = m.Role, Content = m.Content }).ToList()
+            };
+            var result = await AiChatApi.ChatAsync(payload, token);
+            messages.Add(new ChatTurn { Role = "assistant", Content = result.Reply.Trim() });
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+            if (messages.Count > 0 && messages[^1].Role == "user")
+            {
+                messages.RemoveAt(messages.Count - 1);
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            if (messages.Count > 0 && messages[^1].Role == "user")
+            {
+                messages.RemoveAt(messages.Count - 1);
+            }
+        }
+        finally
+        {
+            loading = false;
+            _pendingScroll = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_pendingScroll)
+        {
+            return;
+        }
+
+        _pendingScroll = false;
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "(function(el){ if(!el) return; el.scrollTop = el.scrollHeight; })(document.querySelector('.ai-chat-messages'))");
+        }
+        catch
+        {
+            // 忽略滚动失败
+        }
+    }
+
+    private sealed class ChatTurn
+    {
+        public string Role { get; set; } = "user";
+        public string Content { get; set; } = "";
+    }
+
+}

@@ -1,0 +1,198 @@
+@page "/majors"
+@using KyInfo.Contracts.Majors
+@using KyInfo.Blazor.ApiClient
+@inject MajorsApiClient MajorsApi
+
+<PageTitle>专业查询</PageTitle>
+
+<RequireLogin>
+<div class="section-header">
+    <div class="section-header-title">
+        <h1>专业查询</h1>
+        <span class="pill-badge">按专业名称 / 代码 / 院校筛选</span>
+    </div>
+    <div class="text-muted small section-tagline">
+        结合院校与专业信息，快速了解培养方向、学制与学费。
+    </div>
+</div>
+
+<div class="card card-soft mb-3">
+    <div class="card-header card-soft-header">
+        <strong>筛选条件</strong>
+        <span class="ms-2 text-muted small">
+            当前条件：
+            @if (string.IsNullOrWhiteSpace(keyword) && string.IsNullOrWhiteSpace(schoolIdText))
+            {
+                <span class="pill-badge pill-badge-muted">全部专业</span>
+            }
+            else
+            {
+                @if (!string.IsNullOrWhiteSpace(keyword))
+                {
+                    <span class="pill-badge me-1">关键词：@keyword</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(schoolIdText))
+                {
+                    <span class="pill-badge me-1">院校 Id：@schoolIdText</span>
+                }
+            }
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label small text-muted">关键词</label>
+                <input class="form-control" placeholder="名称 / 代码，如 \"计算机\" / \"0812\"" @bind="keyword" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">院校 Id（可选）</label>
+                <input class="form-control" placeholder="限定某一院校" @bind="schoolIdText" />
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary" @onclick="LoadMajors" disabled="@loading">
+                    @(loading ? "查询中..." : "开始查询")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-warning">@error</div>
+}
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card card-soft h-100">
+            <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>专业列表</strong>
+                    <span class="ms-2 text-muted small">
+                        共 @(majors?.Count ?? 0) 个专业
+                    </span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (loading)
+                {
+                    <div class="p-3 text-muted">加载中...</div>
+                }
+                else if (majors is null || !majors.Any())
+                {
+                    <div class="p-3 text-muted">暂无数据，请调整筛选条件后重试。</div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var m in majors)
+                        {
+                            <li class="list-group-item list-group-item-action" @onclick="@(() => LoadDetail(m.Id))" style="cursor: pointer;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@m.Name</strong>（@m.Code）
+                                        <div class="text-muted small">@m.SchoolName</div>
+                                    </div>
+                                    <div class="text-end small">
+                                        <div class="mb-1">
+                                            <span class="pill-badge me-1">@m.DegreeType</span>
+                                            <span class="pill-badge pill-badge-muted">@m.StudyType</span>
+                                        </div>
+                                        <div class="text-muted">@m.DisciplineCategory</div>
+                                    </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-soft h-100">
+            <div class="card-header card-soft-header">
+                <strong>专业详情</strong>
+            </div>
+            <div class="card-body">
+                @if (selected is null)
+                {
+                    <p class="text-muted mb-0">在左侧列表中选择一个专业，这里将展示其所属院校、学制、学费与简单说明。</p>
+                }
+                else
+                {
+                    <h5 class="card-title mb-1">@selected.Name（@selected.Code）</h5>
+                    <p class="text-muted small mb-2">@selected.SchoolName</p>
+                    <p class="card-text mb-2">
+                        <span class="pill-badge me-1">@selected.DegreeType</span>
+                        <span class="pill-badge pill-badge-muted me-1">@selected.StudyType</span>
+                        <span class="pill-badge pill-badge-muted">@selected.DisciplineCategory</span>
+                    </p>
+                    <p class="card-text mb-2">学制：@selected.DurationYears 年</p>
+                    @if (selected.TuitionPerYear.HasValue)
+                    {
+                        <p class="card-text mb-2">学费：@selected.TuitionPerYear.Value 元/年</p>
+                    }
+                    @if (!string.IsNullOrEmpty(selected.SchoolDepartment))
+                    {
+                        <p class="card-text mb-2">学院：@selected.SchoolDepartment</p>
+                    }
+                    @if (!string.IsNullOrEmpty(selected.Description))
+                    {
+                        <p class="card-text mb-0">说明：@selected.Description</p>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+    </RequireLogin>
+@code {
+    private bool loading;
+    private string keyword = "";
+    private string schoolIdText = "";
+    private List<MajorListItemDto>? majors;
+    private MajorDetailDto? selected;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMajors();
+    }
+
+    private async Task LoadMajors()
+    {
+        error = null;
+        loading = true;
+        selected = null;
+        try
+        {
+            int? schoolId = int.TryParse(schoolIdText, out var sid) ? sid : null;
+            majors = await MajorsApi.SearchAsync(keyword, schoolId);
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+            majors = new List<MajorListItemDto>();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadDetail(int id)
+    {
+        error = null;
+        try
+        {
+            selected = await MajorsApi.GetByIdAsync(id);
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+            selected = null;
+        }
+    }
+
+}

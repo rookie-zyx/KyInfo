@@ -1,0 +1,160 @@
+@page "/register"
+@using Microsoft.AspNetCore.WebUtilities
+@using KyInfo.Blazor.ApiClient
+
+<PageTitle>用户注册 - KyInfo</PageTitle>
+
+<div class="login-anime-page">
+    <div class="login-anime-bg" aria-hidden="true">
+        <span class="login-anime-float login-anime-float-1">✦</span>
+        <span class="login-anime-float login-anime-float-2">♪</span>
+        <span class="login-anime-float login-anime-float-3">☆</span>
+        <span class="login-anime-float login-anime-float-4">✧</span>
+    </div>
+
+    <div class="login-anime-card login-anime-card--wide">
+        <div class="login-anime-card-header">
+            <div class="login-anime-badge">KyInfo</div>
+            <h1 class="login-anime-title">新同学你好</h1>
+            <p class="login-anime-sub">注册账号，一起整理考研信息吧 ♡</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert login-anime-alert login-anime-alert-success" role="alert">
+                @successMessage
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert login-anime-alert login-anime-alert-danger" role="alert">
+                @errorMessage
+            </div>
+        }
+
+        <EditForm Model="@model" OnValidSubmit="@HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="login-anime-validation" />
+
+            <div class="login-anime-field mb-3">
+                <label class="login-anime-label">用户名</label>
+                <InputText class="form-control login-anime-input" @bind-Value="model.UserName" placeholder="起一个昵称…" />
+            </div>
+
+            <div class="login-anime-field mb-3">
+                <label class="login-anime-label">邮箱</label>
+                <InputText class="form-control login-anime-input" @bind-Value="model.Email" type="email" placeholder="name@example.com" />
+            </div>
+
+            <div class="login-anime-field mb-4">
+                <label class="login-anime-label">密码</label>
+                <InputText class="form-control login-anime-input" @bind-Value="model.Password" type="password" placeholder="••••••••" />
+            </div>
+
+            <div class="login-anime-actions">
+                <button class="btn login-anime-btn-primary" type="submit" disabled="@isSubmitting">
+                    @(isSubmitting ? "注册中…" : "注册 ✨")
+                </button>
+                <button class="btn login-anime-btn-ghost" type="button" @onclick="GoToLogin">
+                    已有账号？去登录 →
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private RegisterModel model = new();
+    private bool isSubmitting;
+    private string? errorMessage;
+    private string? successMessage;
+
+    [Inject]
+    private AuthApiClient AuthApi { get; set; } = default!;
+
+    [Inject]
+    private IJSRuntime JS { get; set; } = default!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    private string? returnUrl;
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("returnUrl", out var value))
+        {
+            returnUrl = value.ToString();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                Navigation.NavigateTo("/");
+            }
+        }
+        catch
+        {
+            // 忽略 JS 异常
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        errorMessage = null;
+        successMessage = null;
+        isSubmitting = true;
+
+        try
+        {
+            await AuthApi.RegisterAsync(model.UserName, model.Email, model.Password);
+
+            successMessage = "注册成功，请使用该账号登录。";
+
+            await Task.Delay(800);
+            var next = string.IsNullOrWhiteSpace(returnUrl)
+                ? "/login"
+                : $"/login?returnUrl={Uri.EscapeDataString(returnUrl)}";
+            Navigation.NavigateTo(next);
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "注册过程中发生错误，请稍后重试。";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void GoToLogin()
+    {
+        Navigation.NavigateTo(string.IsNullOrWhiteSpace(returnUrl)
+            ? "/login"
+            : $"/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
+    }
+
+    private sealed class RegisterModel
+    {
+        public string UserName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

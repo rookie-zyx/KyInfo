@@ -1,0 +1,61 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject KyInfo.Blazor.Auth.TokenStore TokenStore
+
+@if (!checkedToken)
+{
+    <p class="text-muted">正在检查登录状态...</p>
+}
+else if (!isLoggedIn)
+{
+    <div class="alert alert-warning" role="alert">
+        需要登录后才能使用该功能，正在跳转到登录页...
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter]
+    public RenderFragment ChildContent { get; set; } = default!;
+
+    private bool checkedToken;
+    private bool isLoggedIn;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 可能存在 JS 尚未就绪的情况（尤其是 Blazor Server 首次预渲染/水合阶段）。
+        // 此时不要直接当作“未登录”重定向，否则会出现：/account -> /login -> /。
+        if (checkedToken)
+        {
+            return;
+        }
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            TokenStore.Token = string.IsNullOrWhiteSpace(token) ? null : token;
+            isLoggedIn = !string.IsNullOrWhiteSpace(token);
+            checkedToken = true;
+        }
+        catch
+        {
+            // JS 读取失败：保持 checkedToken=false，避免错误重定向。
+            // 等下一次渲染（JS 可用）再继续检查。
+            return;
+        }
+
+        if (!isLoggedIn)
+        {
+            var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+            var returnUrl = "/" + relative;
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: false);
+        }
+
+        StateHasChanged();
+    }
+}
+

@@ -1,0 +1,257 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using KyInfo.Blazor.Auth
+@implements IDisposable
+
+<div class="top-row ps-3 pe-2 navbar navbar-dark">
+    <div class="container-fluid d-flex align-items-center justify-content-between flex-nowrap gap-2">
+        <a class="navbar-brand mb-0" href="">KyInfo</a>
+        <span class="nav-brand-caption">菜单</span>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        @if (isLoggedIn)
+        {
+            @if (isAdmin)
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/admin" Match="NavLinkMatch.Prefix">
+                        <span class="bi bi-shield-lock" aria-hidden="true"></span> 管理后台
+                    </NavLink>
+                </div>
+            }
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/account" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-person-circle" aria-hidden="true"></span> 我的档案
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="schools" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-building" aria-hidden="true"></span> 院校查询
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="majors" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-journal-text" aria-hidden="true"></span> 专业查询
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="scorelines" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-graph-up" aria-hidden="true"></span> 分数线
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="scoreline-trends" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-bar-chart-line" aria-hidden="true"></span> 分数线趋势
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="recommendations" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-stars" aria-hidden="true"></span> 智能志愿推荐
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="ai-chat" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-chat-dots" aria-hidden="true"></span> AI 助手
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="recruitinfos" Match="NavLinkMatch.Prefix">
+                    <span class="bi bi-file-text" aria-hidden="true"></span> 招生简章
+                </NavLink>
+            </div>
+            <div class="nav-item px-3 mt-3">
+                <button class="nav-link btn btn-link text-start w-100" type="button" @onclick="Logout">
+                    <span class="bi bi-box-arrow-right" aria-hidden="true"></span> 退出登录
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="nav-item px-3 mt-3">
+                <NavLink class="nav-link" href="login" Match="NavLinkMatch.All">
+                    <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> 登录
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="register" Match="NavLinkMatch.All">
+                    <span class="bi bi-person-plus" aria-hidden="true"></span> 注册
+                </NavLink>
+            </div>
+        }
+    </nav>
+</div>
+
+@code {
+    [Inject]
+    private IJSRuntime JS { get; set; } = default!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    [Inject]
+    private KyInfo.Blazor.Auth.TokenStore TokenStore { get; set; } = default!;
+
+    [Inject]
+    private KyInfo.Blazor.ApiClient.AccountApiClient AccountApi { get; set; } = default!;
+
+    private bool isLoggedIn;
+    private bool isAdmin;
+    private string? lastTokenChecked;
+    private DateTimeOffset _lastMeFetchAttemptUtc = DateTimeOffset.MinValue;
+
+    protected override void OnInitialized()
+    {
+        // 保证登录/退出后导航栏能重新计算 isLoggedIn/isAdmin。
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 每次渲染后都尝试同步一次登录状态，保证登录/退出后导航栏及时刷新
+        try
+        {
+            var storeToken = TokenStore.Token;
+            string? token;
+            string? role = null;
+
+            if (!string.IsNullOrWhiteSpace(storeToken))
+            {
+                token = storeToken;
+                // 优先从 JWT 直接解析 role：避免 localStorage/JS 时序导致管理员菜单不刷新。
+                role = TryReadRoleFromJwt(token);
+                // 只要 token 变了，才重新从后端拿 role，避免重复请求。
+                if (!string.Equals(storeToken, lastTokenChecked, StringComparison.Ordinal))
+                {
+                    // 失败时不要立刻把 lastTokenChecked 锁死，
+                    // 否则可能因为短时 401/时序问题导致菜单角色永远不刷新。
+                    var now = DateTimeOffset.UtcNow;
+                    if ((now - _lastMeFetchAttemptUtc).TotalSeconds >= 2)
+                    {
+                        _lastMeFetchAttemptUtc = now;
+                        try
+                        {
+                            var me = await AccountApi.GetMeAsync();
+                            role = me.Role;
+                            lastTokenChecked = storeToken; // 只有拿到结果后才更新
+                        }
+                        catch
+                        {
+                            // 保持 lastTokenChecked 不变，让下一次渲染还能重试
+                            // 兜底：如果后端 /api/Account/me 偶发 401/失败，但本地已保存 kyinfo_role，
+                            // 仍允许菜单先行显示（后台页面仍会再次进行后端校验）。
+                            try
+                            {
+                                role = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_role");
+                            }
+                            catch
+                            {
+                                role = null;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+                role = string.IsNullOrWhiteSpace(token) ? null : TryReadRoleFromJwt(token!);
+                if (string.IsNullOrWhiteSpace(role))
+                {
+                    // 兜底：如果 JWT 里没带 role 或解析失败，才读取本地缓存。
+                    role = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_role");
+                }
+                lastTokenChecked = token;
+
+                // 同步到 TokenStore：后续 /api/* 请求的 Authorization 头由 DelegatingHandler 生成。
+                TokenStore.Token = string.IsNullOrWhiteSpace(token) ? null : token;
+            }
+
+            var newState = !string.IsNullOrWhiteSpace(token);
+            var newAdmin = newState && AdminAreaRoles.IsStaff(role);
+            if (newState != isLoggedIn || newAdmin != isAdmin)
+            {
+                isLoggedIn = newState;
+                isAdmin = newAdmin;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // JS/localStorage 读取可能在水合早期偶发失败。
+            // 不要强制把菜单置为“未登录”，否则可能出现：
+            // token 已能用于 API 请求，但菜单一直保持登录/注册状态。
+            return;
+        }
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Logout()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_token");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_userName");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_role");
+        }
+        catch
+        {
+            // 忽略 JS 异常
+        }
+
+        TokenStore.Token = null;
+        lastTokenChecked = null;
+        isLoggedIn = false;
+        StateHasChanged();
+        Navigation.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
+    }
+
+    private static string? TryReadRoleFromJwt(string token)
+    {
+        try
+        {
+            // JWT: header.payload.signature
+            var parts = token.Split('.');
+            if (parts.Length < 2)
+            {
+                return null;
+            }
+
+            var payload = parts[1];
+            // Base64Url -> Base64
+            payload = payload.Replace('-', '+').Replace('_', '/');
+            // Pad
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                return roleEl.GetString();
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+

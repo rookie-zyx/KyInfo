@@ -1,0 +1,241 @@
+@page "/login"
+@using Microsoft.AspNetCore.WebUtilities
+@using KyInfo.Contracts.Auth
+@using KyInfo.Blazor.ApiClient
+@using KyInfo.Blazor.Auth
+
+<PageTitle>用户登录 - KyInfo</PageTitle>
+
+<div class="login-anime-page">
+    <div class="login-anime-bg" aria-hidden="true">
+        <span class="login-anime-float login-anime-float-1">✦</span>
+        <span class="login-anime-float login-anime-float-2">♪</span>
+        <span class="login-anime-float login-anime-float-3">☆</span>
+        <span class="login-anime-float login-anime-float-4">✧</span>
+    </div>
+
+    <div class="login-anime-card">
+        <div class="login-anime-card-header">
+            <div class="login-anime-badge">KyInfo</div>
+            <h1 class="login-anime-title">欢迎回来</h1>
+            <p class="login-anime-sub">继续你的考研信息之旅吧 ♡</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert login-anime-alert login-anime-alert-success" role="alert">
+                @successMessage
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert login-anime-alert login-anime-alert-danger" role="alert">
+                @errorMessage
+            </div>
+        }
+
+        <EditForm Model="@loginModel" OnValidSubmit="@HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="login-anime-validation" />
+
+            <div class="login-anime-field mb-3">
+                <label class="login-anime-label">用户名或邮箱</label>
+                <InputText class="form-control login-anime-input" @bind-Value="loginModel.UserNameOrEmail" placeholder="请输入…" />
+            </div>
+
+            <div class="login-anime-field mb-4">
+                <label class="login-anime-label">密码</label>
+                <InputText class="form-control login-anime-input" @bind-Value="loginModel.Password" type="password" placeholder="••••••••" />
+            </div>
+
+            <div class="login-anime-actions">
+                <button class="btn login-anime-btn-primary" type="submit" disabled="@isSubmitting">
+                    @(isSubmitting ? "登录中…" : "登录 ✨")
+                </button>
+                <button class="btn login-anime-btn-ghost" type="button" @onclick="GoToRegister">
+                    还没有账号？去注册 →
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginModel = new();
+    private bool isSubmitting;
+    private string? errorMessage;
+    private string? successMessage;
+
+    [Inject]
+    private AuthApiClient AuthApi { get; set; } = default!;
+
+    [Inject]
+    private AccountApiClient AccountApi { get; set; } = default!;
+
+    [Inject]
+    private TokenStore TokenStore { get; set; } = default!;
+
+    [Inject]
+    private IJSRuntime JS { get; set; } = default!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    private string? returnUrl;
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("returnUrl", out var value))
+        {
+            returnUrl = value.ToString();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                // 如果本地 token 存在，需要用后端校验一次，避免“token 失效但仍跳转”的错误链路。
+                var target = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+                try
+                {
+                    var me = await AccountApi.GetMeAsync();
+                    if (me is not null)
+                    {
+                        Navigation.NavigateTo(target, forceLoad: false);
+                        return;
+                    }
+                }
+                catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    // 不要把“短时 401（可能是 token 注入尚未就绪）”直接当成 token 已过期。
+                    // 只有当 JWT 的 exp 明确过期时才清理 localStorage，避免登录页形成循环。
+                    var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
+                    if (expired)
+                    {
+                        await ClearLocalLoginStateAsync();
+                    }
+
+                    errorMessage = expired ? "登录已过期，请重新登录。" : "登录状态暂时不可用，请稍后重试。";
+                    StateHasChanged();
+                }
+            }
+        }
+        catch
+        {
+            // 忽略 JS 异常
+        }
+    }
+
+    private static bool IsJwtExpired(string token)
+    {
+        try
+        {
+            // JWT: header.payload.signature
+            var parts = token.Split('.');
+            if (parts.Length < 2)
+            {
+                return true;
+            }
+
+            var payload = parts[1];
+            // Base64Url -> Base64
+            payload = payload.Replace('-', '+').Replace('_', '/');
+            // Pad
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("exp", out var expEl) && expEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+            {
+                var exp = expEl.GetInt64();
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                return exp <= now;
+            }
+
+            // 没有 exp 时保守：不要清理，避免循环
+            return false;
+        }
+        catch
+        {
+            // 解析失败也不要清理，避免循环
+            return false;
+        }
+    }
+
+    private async Task ClearLocalLoginStateAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_token");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_userName");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_role");
+        }
+        catch
+        {
+            // 忽略 localStorage 清理失败
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        errorMessage = null;
+        successMessage = null;
+        isSubmitting = true;
+
+        try
+        {
+            var auth = await AuthApi.LoginAsync(loginModel);
+
+            await JS.InvokeVoidAsync("localStorage.setItem", "kyinfo_token", auth.Token);
+            await JS.InvokeVoidAsync("localStorage.setItem", "kyinfo_userName", auth.UserName ?? string.Empty);
+            await JS.InvokeVoidAsync("localStorage.setItem", "kyinfo_role", auth.Role ?? string.Empty);
+
+            // 登录成功后立即写入会话缓存，后续 API 请求优先从缓存读取 token，
+            // 避免 localStorage/JS 读取时机问题导致请求带不上 Authorization。
+            TokenStore.Token = auth.Token;
+
+            successMessage = "登录成功，正在跳转…";
+
+            await Task.Delay(800);
+            var target = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+            // 避免强制整页刷新导致 TokenStore（会话缓存）丢失，并减少 JS/localStorage 注入时序问题。
+            Navigation.NavigateTo(target, forceLoad: false);
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "登录过程中发生错误，请稍后重试。";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void GoToRegister()
+    {
+        Navigation.NavigateTo(string.IsNullOrWhiteSpace(returnUrl)
+            ? "/register"
+            : $"/register?returnUrl={Uri.EscapeDataString(returnUrl)}");
+    }
+
+}

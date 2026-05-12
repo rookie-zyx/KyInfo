@@ -1,0 +1,220 @@
+@page "/scoreline-trends"
+@using KyInfo.Contracts.ScoreLines
+@using KyInfo.Blazor.ApiClient
+@inject ScoreLinesApiClient ScoreLinesApi
+
+<PageTitle>分数线趋势</PageTitle>
+
+<RequireLogin>
+<div class="section-header">
+    <div class="section-header-title">
+        <h1>分数线趋势</h1>
+        <span class="pill-badge">按年份查看国家线与院校线变化</span>
+    </div>
+    <div class="text-muted small section-tagline">
+        选择院校 / 专业与类型，观察近年分数线走势，为志愿填报提供参考。
+    </div>
+</div>
+
+<div class="card card-soft mb-3">
+    <div class="card-header card-soft-header">
+        <strong>筛选条件</strong>
+        <span class="ms-2 text-muted small">
+            当前条件：
+            @if (string.IsNullOrWhiteSpace(schoolIdText) && string.IsNullOrWhiteSpace(majorIdText) && string.IsNullOrWhiteSpace(isNationalText))
+            {
+                <span class="pill-badge pill-badge-muted">全部分数线</span>
+            }
+            else
+            {
+                @if (!string.IsNullOrWhiteSpace(schoolIdText))
+                {
+                    <span class="pill-badge me-1">院校 Id：@schoolIdText</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(majorIdText))
+                {
+                    <span class="pill-badge me-1">专业 Id：@majorIdText</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(isNationalText))
+                {
+                    <span class="pill-badge me-1">类型：@(isNationalText == "true" ? "国家线" : "院校/专业线")</span>
+                }
+            }
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted">院校 Id（可选）</label>
+                <input class="form-control" placeholder="限定某一院校" @bind="schoolIdText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">专业 Id（可选）</label>
+                <input class="form-control" placeholder="限定某一专业" @bind="majorIdText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">类型</label>
+                <select class="form-control" @bind="isNationalText">
+                    <option value="">全部</option>
+                    <option value="true">国家线</option>
+                    <option value="false">院校/专业线</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-grid">
+                <button class="btn btn-primary" @onclick="Load" disabled="@loading">
+                    @(loading ? "加载中..." : "绘制趋势图")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-warning">@error</div>
+}
+
+@if (loading)
+{
+    <p>加载数据中，请稍候...</p>
+}
+else if (points is null)
+{
+    <p class="text-muted">请输入条件后点击“绘制趋势图”。</p>
+}
+else if (!points.Any())
+{
+    <p>暂无数据，请确认已录入对应的分数线。</p>
+}
+else
+{
+    <div class="card card-soft">
+        <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+            <div>
+                <strong>分数线趋势图</strong>
+                <span class="ms-2 text-muted small">
+                    共 @points.Count 条记录。横轴为年份，纵轴为分数（按同年平均值绘制）。
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+            <svg width="100%" viewBox="0 0 600 300" preserveAspectRatio="none" style="background-color:#f8f9fa;border-radius:4px;">
+                @* 坐标轴 *@
+                <line x1="50" y1="20" x2="50" y2="260" stroke="#ccc" stroke-width="1" />
+                <line x1="50" y1="260" x2="580" y2="260" stroke="#ccc" stroke-width="1" />
+
+                @foreach (var tick in YTicks)
+                {
+                    var ty = MapY(tick);
+                    <line x1="50" y1="@ty" x2="580" y2="@ty" stroke="#eee" stroke-width="1" />
+                    @:<text x="45" y="@ty" text-anchor="end" dominant-baseline="middle" font-size="10">@tick</text>
+                }
+
+                @foreach (var xt in XTicks)
+                {
+                    @:<text x="@xt.x" y="275" text-anchor="middle" font-size="10">@xt.year</text>
+                }
+
+                @* 折线 *@
+                <polyline points="@PolylinePoints" fill="none" stroke="#0d6efd" stroke-width="2" />
+
+                @* 拐点 *@
+                @foreach (var p in points)
+                {
+                    var (x, y) = MapPoint(p);
+                    <circle cx="@x" cy="@y" r="3" fill="#0d6efd" />
+                }
+            </svg>
+        </div>
+    </div>
+}
+
+</RequireLogin>
+@code {
+    private bool loading;
+    private string schoolIdText = "";
+    private string majorIdText = "";
+    private string isNationalText = "";
+    private string? error;
+
+    private List<ScoreLineTrendPointDto>? points;
+
+    private IReadOnlyList<int> YTicks => points is null || !points.Any()
+        ? Array.Empty<int>()
+        : Enumerable.Range(0, 5)
+            .Select(i => MinScore + (MaxScore - MinScore) * i / 4)
+            .ToList();
+
+    private IReadOnlyList<(int year, double x)> XTicks => points is null || !points.Any()
+        ? Array.Empty<(int, double)>()
+        : points.Select(p => (p.Year, MapX(p.Year))).ToList();
+
+    private int MinScore => points!.Min(p => p.Score);
+    private int MaxScore => points!.Max(p => p.Score);
+
+    private string PolylinePoints => points is null
+        ? ""
+        : string.Join(" ",
+            points.Select(p =>
+            {
+                var (x, y) = MapPoint(p);
+                return $"{x},{y}";
+            }));
+
+    private async Task Load()
+    {
+        error = null;
+        points = null;
+
+        loading = true;
+        try
+        {
+            int? schoolId = int.TryParse(schoolIdText, out var sid) ? sid : null;
+            int? majorId = int.TryParse(majorIdText, out var mid) ? mid : null;
+            bool? isNational = bool.TryParse(isNationalText, out var n) ? n : null;
+
+            points = await ScoreLinesApi.GetTrendAsync(schoolId, majorId, isNational);
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+            points = new List<ScoreLineTrendPointDto>();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private (double x, double y) MapPoint(ScoreLineTrendPointDto p)
+    {
+        var x = MapX(p.Year);
+        var y = MapY(p.Score);
+        return (x, y);
+    }
+
+    private double MapX(int year)
+    {
+        if (points is null || points.Count == 0) return 50;
+        var minYear = points.Min(p => p.Year);
+        var maxYear = points.Max(p => p.Year);
+        if (minYear == maxYear) return 315; // 中间
+
+        var t = (year - minYear) / (double)(maxYear - minYear);
+        return 50 + t * (580 - 50);
+    }
+
+    private double MapY(int score)
+    {
+        if (points is null || points.Count == 0) return 260;
+        var min = MinScore;
+        var max = MaxScore;
+        if (min == max) return 140; // 中间
+
+        var t = (score - min) / (double)(max - min);
+        // SVG y 轴向下，所以高分在上
+        return 260 - t * (260 - 20);
+    }
+
+}
+

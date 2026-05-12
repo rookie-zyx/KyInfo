@@ -1,0 +1,773 @@
+@page "/admin"
+@using KyInfo.Contracts.Admin
+@using KyInfo.Blazor.ApiClient
+
+<PageTitle>管理后台 - KyInfo</PageTitle>
+
+<RequireAdmin>
+    <div class="section-header">
+        <div class="section-header-title">
+            <h1>管理后台</h1>
+            <span class="pill-badge">用户管理 · 成绩 Excel 批量导入</span>
+        </div>
+        <div class="text-muted small section-tagline">
+            仅管理员可见：维护系统用户，或通过模板批量导入考试成绩数据。
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="alert alert-success" role="alert">@statusMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@errorMessage</div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card card-soft h-100">
+                <div class="card-header card-soft-header">
+                    <strong>新建用户</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">用户名</label>
+                            <input class="form-control" @bind="newUserName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">邮箱</label>
+                            <input class="form-control" type="email" @bind="newEmail" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">初始密码</label>
+                            <input class="form-control" type="password" @bind="newPassword" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">角色</label>
+                            <select class="form-select" @bind="newRole" disabled>
+                                <option value="User">User</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-primary" type="button" @onclick="CreateUser" disabled="@busy">
+                            @(busy ? "处理中..." : "创建用户")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card card-soft h-100">
+                <div class="card-header card-soft-header">
+                    <strong>批量导入成绩（Excel）</strong>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">
+                        请先下载模板，按列填写后上传 .xlsx。必填列：用户Id、年份、总分；可选：政治、英语、数学、专业课、院校Id、专业Id。
+                    </p>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="DownloadTemplate" disabled="@busy">
+                            下载模板
+                        </button>
+                    </div>
+                    <InputFile OnChange="OnExcelFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control" />
+                    @if (lastImportResult is not null)
+                    {
+                        <div class="mt-3 small">
+                            <div>成功：<strong>@lastImportResult.SuccessCount</strong> 条</div>
+                            @if (lastImportResult.Errors.Count > 0)
+                            {
+                                <div class="text-danger mt-1">失败行：</div>
+                                <ul class="mb-0 ps-3">
+                                    @foreach (var e in lastImportResult.Errors.Take(20))
+                                    {
+                                        <li>第 @e.RowNumber 行：@e.Message</li>
+                                    }
+                                    @if (lastImportResult.Errors.Count > 20)
+                                    {
+                                        <li>… 共 @lastImportResult.Errors.Count 条错误</li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (IsRootUser())
+    {
+        <div class="card card-soft mb-4">
+            <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+                <strong>管理员账号（仅 Root）</strong>
+                <button class="btn btn-sm btn-outline-primary" type="button" @onclick="ReloadAdministrators" disabled="@busy">刷新</button>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-3">由 Root 创建的管理员可进入本后台并仅维护普通用户；撤权后账号降为普通用户。</p>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">用户名</label>
+                        <input class="form-control" @bind="newAdminUserName" disabled="@busy" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">邮箱</label>
+                        <input class="form-control" type="email" @bind="newAdminEmail" disabled="@busy" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">初始密码</label>
+                        <input class="form-control" type="password" @bind="newAdminPassword" disabled="@busy" />
+                    </div>
+                </div>
+                <button class="btn btn-primary mb-3" type="button" @onclick="CreateAdministrator" disabled="@busy">创建管理员</button>
+
+                @if (loadingAdmins)
+                {
+                    <p class="text-muted mb-0">加载中...</p>
+                }
+                else if (administrators.Count == 0)
+                {
+                    <p class="text-muted mb-0">暂无管理员（除 Root 外）。</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Id</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>角色</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in administrators)
+                                {
+                                    <tr>
+                                        <td>@a.Id</td>
+                                        <td>@a.UserName</td>
+                                        <td>@a.Email</td>
+                                        <td>@a.Role</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-warning" type="button" disabled="@busy" @onclick="() => RemoveAdministrator(a.Id)">撤权</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="card card-soft">
+        <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+            <strong>用户列表</strong>
+            <button class="btn btn-sm btn-outline-primary" type="button" @onclick="ReloadUsers" disabled="@busy">刷新</button>
+        </div>
+        <div class="card-body p-0">
+            @if (loadingList)
+            {
+                <p class="p-3 text-muted mb-0">加载中...</p>
+            }
+            else if (users.Count == 0)
+            {
+                <p class="p-3 text-muted mb-0">暂无用户数据。</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Id</th>
+                                <th>用户名</th>
+                                <th>邮箱</th>
+                                <th>角色</th>
+                                <th>创建时间（UTC）</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var u in users)
+                            {
+                                <tr>
+                                    <td>@u.Id</td>
+                                    <td>@u.UserName</td>
+                                    <td>@u.Email</td>
+                                    <td>@u.Role</td>
+                                    <td class="small">@u.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-primary me-2"
+                                                type="button"
+                                                disabled="@(busy || savingEdit)"
+                                                @onclick="() => StartEditUser(u)">
+                                            编辑
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                type="button"
+                                                disabled="@(busy || (currentUserId.HasValue && u.Id == currentUserId.Value))"
+                                                @onclick="() => DeleteUser(u.Id)">
+                                            删除
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (editingUserId.HasValue)
+    {
+        <div class="card card-soft mt-3">
+            <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+                <strong>修改用户</strong>
+                <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="CancelEdit" disabled="@(busy || savingEdit)">
+                    取消
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">用户名</label>
+                        <input class="form-control" @bind="editUserName" disabled="@(busy || savingEdit)" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">邮箱</label>
+                        <input class="form-control" type="email" @bind="editEmail" disabled="@(busy || savingEdit)" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">新密码（可选）</label>
+                        <input class="form-control" type="password" @bind="editPassword" disabled="@(busy || savingEdit)" placeholder="不填则不修改密码" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">角色</label>
+                        <select class="form-select" disabled="true">
+                            <option value="User">User</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-3 d-flex gap-2">
+                    <button class="btn btn-primary" type="button" disabled="@(busy || savingEdit)" @onclick="SaveEditUser">
+                        @(savingEdit ? "保存中..." : "保存修改")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</RequireAdmin>
+
+@code {
+    [Inject]
+    private AdminApiClient AdminApi { get; set; } = default!;
+
+    [Inject]
+    private AccountApiClient AccountApi { get; set; } = default!;
+
+    [Inject]
+    private Microsoft.JSInterop.IJSRuntime JS { get; set; } = default!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    [Inject]
+    private KyInfo.Blazor.Auth.TokenStore TokenStore { get; set; } = default!;
+
+    private List<AdminUserListItemDto> users = new();
+    private List<AdminUserListItemDto> administrators = new();
+    private string? currentUserRole;
+    private int? currentUserId;
+    private bool loadingList = true;
+    private bool loadingAdmins;
+    private string newAdminUserName = "";
+    private string newAdminEmail = "";
+    private string newAdminPassword = "";
+    private bool busy;
+
+    private string newUserName = "";
+    private string newEmail = "";
+    private string newPassword = "";
+    private string newRole = "User";
+
+    private int? editingUserId;
+    private string editUserName = "";
+    private string editEmail = "";
+    private string editPassword = "";
+    private bool savingEdit;
+
+    private string? statusMessage;
+    private string? errorMessage;
+    private ExcelImportResultDto? lastImportResult;
+    private bool initialized;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || initialized)
+        {
+            return;
+        }
+
+        // 防止首次水合阶段 localStorage 读取/Token 注入尚未就绪就先发起受保护 API 调用，
+        // 导致 401 -> 反复跳转/加载失败。
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+        }
+        catch
+        {
+            return;
+        }
+
+        initialized = true;
+
+        await LoadCurrentUserAsync();
+        await ReloadUsers();
+        if (IsRootUser())
+        {
+            await ReloadAdministrators();
+        }
+    }
+
+    private bool IsRootUser() =>
+        !string.IsNullOrEmpty(currentUserRole) &&
+        string.Equals(currentUserRole, "Root", StringComparison.OrdinalIgnoreCase);
+
+    private async Task LoadCurrentUserAsync()
+    {
+        try
+        {
+            var me = await AccountApi.GetMeAsync();
+            currentUserId = me.Id;
+            currentUserRole = me.Role;
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
+            if (expired)
+            {
+                await ClearLocalLoginStateAsync();
+                Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/admin")}", forceLoad: false);
+            }
+            else
+            {
+                errorMessage = "登录状态暂时不可用，请稍后重试。";
+                currentUserId = null;
+                currentUserRole = null;
+            }
+            return;
+        }
+        catch
+        {
+            currentUserId = null;
+            currentUserRole = null;
+        }
+    }
+
+    private async Task ReloadUsers()
+    {
+        loadingList = true;
+        errorMessage = null;
+        StateHasChanged();
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            users = await AdminApi.GetUsersAsync(token);
+        }
+        catch (ApiException ex)
+        {
+            if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+                var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
+                if (expired)
+                {
+                    await ClearLocalLoginStateAsync();
+                    Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/admin")}", forceLoad: false);
+                }
+                else
+                {
+                    errorMessage = "登录状态暂时不可用，请稍后重试。";
+                    users = new List<AdminUserListItemDto>();
+                }
+                return;
+            }
+
+            if (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                errorMessage = "当前账号无管理后台权限（需 Admin 或 Root）。请重新登录。";
+                users = new List<AdminUserListItemDto>();
+                return;
+            }
+
+            errorMessage = ex.Message;
+            users = new List<AdminUserListItemDto>();
+        }
+        catch
+        {
+            errorMessage = "加载用户列表失败。";
+            users = new List<AdminUserListItemDto>();
+        }
+        finally
+        {
+            loadingList = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ReloadAdministrators()
+    {
+        if (!IsRootUser())
+        {
+            return;
+        }
+
+        loadingAdmins = true;
+        errorMessage = null;
+        StateHasChanged();
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            administrators = await AdminApi.GetAdministratorsAsync(token);
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+            administrators = new List<AdminUserListItemDto>();
+        }
+        catch
+        {
+            errorMessage = "加载管理员列表失败。";
+            administrators = new List<AdminUserListItemDto>();
+        }
+        finally
+        {
+            loadingAdmins = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateAdministrator()
+    {
+        statusMessage = null;
+        errorMessage = null;
+        busy = true;
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            await AdminApi.CreateAdministratorAsync(
+                new AdminCreateAdministratorRequest
+                {
+                    UserName = newAdminUserName,
+                    Email = newAdminEmail,
+                    Password = newAdminPassword
+                },
+                token);
+            statusMessage = "管理员已创建。";
+            newAdminUserName = "";
+            newAdminEmail = "";
+            newAdminPassword = "";
+            await ReloadAdministrators();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "创建管理员失败。";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RemoveAdministrator(int id)
+    {
+        statusMessage = null;
+        errorMessage = null;
+        busy = true;
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            await AdminApi.RemoveAdministratorAsync(id, token);
+            statusMessage = "已撤权管理员。";
+            await ReloadAdministrators();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "撤权失败。";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CreateUser()
+    {
+        statusMessage = null;
+        errorMessage = null;
+        busy = true;
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            await AdminApi.CreateUserAsync(new AdminCreateUserRequest
+            {
+                UserName = newUserName,
+                Email = newEmail,
+                Password = newPassword,
+                Role = newRole
+            }, token);
+            statusMessage = "用户已创建。";
+            newUserName = "";
+            newEmail = "";
+            newPassword = "";
+            newRole = "User";
+            await ReloadUsers();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "创建失败。";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteUser(int id)
+    {
+        statusMessage = null;
+        errorMessage = null;
+        busy = true;
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            await AdminApi.DeleteUserAsync(id, token);
+            statusMessage = "用户已删除。";
+            await ReloadUsers();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "删除失败。";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void StartEditUser(AdminUserListItemDto u)
+    {
+        editingUserId = u.Id;
+        editUserName = u.UserName;
+        editEmail = u.Email;
+        editPassword = "";
+        savingEdit = false;
+    }
+
+    private void CancelEdit()
+    {
+        editingUserId = null;
+        editUserName = "";
+        editEmail = "";
+        editPassword = "";
+    }
+
+    private async Task SaveEditUser()
+    {
+        if (!editingUserId.HasValue)
+        {
+            return;
+        }
+
+        statusMessage = null;
+        errorMessage = null;
+        savingEdit = true;
+
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            await AdminApi.UpdateUserAsync(editingUserId.Value, new AdminUpdateUserRequest
+            {
+                UserName = editUserName,
+                Email = editEmail,
+                Role = "User",
+                Password = string.IsNullOrWhiteSpace(editPassword) ? null : editPassword
+            }, token);
+
+            statusMessage = "用户已更新。";
+            editingUserId = null;
+            await ReloadUsers();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "保存失败，请稍后重试。";
+        }
+        finally
+        {
+            savingEdit = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string?> GetAdminTokenAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(TokenStore.Token))
+        {
+            return TokenStore.Token;
+        }
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            return string.IsNullOrWhiteSpace(token) ? null : token;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task ClearLocalLoginStateAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_token");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_userName");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_role");
+        }
+        catch
+        {
+            // Ignore localStorage errors
+        }
+    }
+
+    private static bool IsJwtExpired(string token)
+    {
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length < 2)
+            {
+                return true;
+            }
+
+            var payload = parts[1];
+            payload = payload.Replace('-', '+').Replace('_', '/');
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("exp", out var expEl) && expEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+            {
+                var exp = expEl.GetInt64();
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                return exp <= now;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task DownloadTemplate()
+    {
+        errorMessage = null;
+        busy = true;
+        try
+        {
+            var token = await GetAdminTokenAsync();
+            var bytes = await AdminApi.DownloadExamScoreTemplateAsync(token);
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("kyinfoDownloadFile", "成绩导入模板.xlsx", base64);
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "下载模板失败。";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task OnExcelFile(InputFileChangeEventArgs e)
+    {
+        statusMessage = null;
+        errorMessage = null;
+        lastImportResult = null;
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
+            await using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+            var token = await GetAdminTokenAsync();
+            lastImportResult = await AdminApi.ImportExamScoresAsync(ms, file.Name, token);
+            statusMessage = $"导入完成：成功 {lastImportResult.SuccessCount} 条。";
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch
+        {
+            errorMessage = "导入过程出错。";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

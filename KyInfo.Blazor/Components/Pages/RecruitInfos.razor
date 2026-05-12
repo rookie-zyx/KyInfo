@@ -1,0 +1,202 @@
+@page "/recruitinfos"
+@using KyInfo.Contracts.RecruitInfos
+@using KyInfo.Blazor.ApiClient
+@inject RecruitInfosApiClient RecruitInfosApi
+
+<PageTitle>招生简章</PageTitle>
+
+<RequireLogin>
+<div class="section-header">
+    <div class="section-header-title">
+        <h1>招生简章 / 报考信息</h1>
+        <span class="pill-badge">查看各院校专业的招生计划与报考要求</span>
+    </div>
+    <div class="text-muted small section-tagline">
+        通过年份、院校 Id、专业 Id 组合筛选，快速定位目标简章并查看原文链接。
+    </div>
+</div>
+
+<div class="card card-soft mb-3">
+    <div class="card-header card-soft-header">
+        <strong>筛选条件</strong>
+        <span class="ms-2 text-muted small">
+            当前条件：
+            @if (string.IsNullOrWhiteSpace(schoolIdText) && string.IsNullOrWhiteSpace(majorIdText) && string.IsNullOrWhiteSpace(yearText))
+            {
+                <span class="pill-badge pill-badge-muted">全部简章</span>
+            }
+            else
+            {
+                @if (!string.IsNullOrWhiteSpace(yearText))
+                {
+                    <span class="pill-badge me-1">年份：@yearText</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(schoolIdText))
+                {
+                    <span class="pill-badge me-1">院校 Id：@schoolIdText</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(majorIdText))
+                {
+                    <span class="pill-badge me-1">专业 Id：@majorIdText</span>
+                }
+            }
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted">院校 Id（可选）</label>
+                <input class="form-control" placeholder="限定院校" @bind="schoolIdText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">专业 Id（可选）</label>
+                <input class="form-control" placeholder="限定专业" @bind="majorIdText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">年份</label>
+                <input class="form-control" placeholder="如 2025" @bind="yearText" />
+            </div>
+            <div class="col-md-3 d-grid">
+                <button class="btn btn-primary" @onclick="Load" disabled="@loading">
+                    @(loading ? "查询中..." : "开始查询")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-warning">@error</div>
+}
+
+@if (loading)
+{
+    <p>加载中...</p>
+}
+else if (list is null || !list.Any())
+{
+    <p>暂无数据</p>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card card-soft h-100">
+                <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>简章列表</strong>
+                        <span class="ms-2 text-muted small">共 @list.Count 条记录</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        @foreach (var r in list)
+                        {
+                            <li class="list-group-item list-group-item-action" @onclick="@(() => LoadDetail(r.Id))" style="cursor: pointer;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@r.Year</strong> · @r.SchoolName · @r.MajorName
+                                    </div>
+                                    @if (r.PlanCount.HasValue)
+                                    {
+                                        <span class="pill-badge pill-badge-muted">计划 @r.PlanCount 人</span>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card card-soft h-100">
+                <div class="card-header card-soft-header">
+                    <strong>简章详情</strong>
+                </div>
+                <div class="card-body">
+                    @if (selected is null)
+                    {
+                        <p class="text-muted mb-0">在左侧列表中选择一条记录，这里将展示招生计划、考试科目、其他要求及原文链接。</p>
+                    }
+                    else
+                    {
+                        <h5 class="card-title">@selected.Year · @selected.SchoolName · @selected.MajorName</h5>
+                        @if (selected.PlanCount.HasValue)
+                        {
+                            <p class="card-text">招生计划：@selected.PlanCount 人</p>
+                        }
+                        @if (!string.IsNullOrEmpty(selected.ExamSubjects))
+                        {
+                            <p class="card-text">考试科目：@selected.ExamSubjects</p>
+                        }
+                        @if (!string.IsNullOrEmpty(selected.ExtraRequirements))
+                        {
+                            <p class="card-text">其他要求：@selected.ExtraRequirements</p>
+                        }
+                        @if (!string.IsNullOrEmpty(selected.SourceUrl))
+                        {
+                            <p class="card-text">简章链接：<a href="@selected.SourceUrl" target="_blank" rel="noopener">@selected.SourceUrl</a></p>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+</RequireLogin>
+@code {
+    private bool loading;
+    private string schoolIdText = "";
+    private string majorIdText = "";
+    private string yearText = "";
+    private List<RecruitInfoListItemDto>? list;
+    private RecruitInfoDetailDto? selected;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        loading = true;
+        try
+        {
+            int? schoolId = int.TryParse(schoolIdText, out var sid) ? sid : null;
+            int? majorId = int.TryParse(majorIdText, out var mid) ? mid : null;
+            int? year = int.TryParse(yearText, out var y) ? y : null;
+
+            list = await RecruitInfosApi.SearchAsync(schoolId, majorId, year);
+            selected = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+            list = new List<RecruitInfoListItemDto>();
+            selected = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadDetail(int id)
+    {
+        error = null;
+        try
+        {
+            selected = await RecruitInfosApi.GetByIdAsync(id);
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+            selected = null;
+        }
+    }
+
+}

@@ -1,0 +1,175 @@
+@page "/scorelines"
+@using KyInfo.Contracts.ScoreLines
+@using KyInfo.Blazor.ApiClient
+@inject ScoreLinesApiClient ScoreLinesApi
+
+<PageTitle>分数线</PageTitle>
+
+<RequireLogin>
+<div class="section-header">
+    <div class="section-header-title">
+        <h1>分数线查询</h1>
+        <span class="pill-badge">查看国家线与各院校 / 专业历史分数线</span>
+    </div>
+    <div class="text-muted small section-tagline">
+        支持按年份、院校、专业和类型筛选，可配合趋势图一起分析变化情况。
+    </div>
+</div>
+
+<div class="card card-soft mb-3">
+    <div class="card-header card-soft-header">
+        <strong>筛选条件</strong>
+        <span class="ms-2 text-muted small">
+            当前条件：
+            @if (string.IsNullOrWhiteSpace(schoolIdText) && string.IsNullOrWhiteSpace(majorIdText) && string.IsNullOrWhiteSpace(yearText) && string.IsNullOrWhiteSpace(isNationalText))
+            {
+                <span class="pill-badge pill-badge-muted">全部分数线</span>
+            }
+            else
+            {
+                @if (!string.IsNullOrWhiteSpace(yearText))
+                {
+                    <span class="pill-badge me-1">年份：@yearText</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(schoolIdText))
+                {
+                    <span class="pill-badge me-1">院校 Id：@schoolIdText</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(majorIdText))
+                {
+                    <span class="pill-badge me-1">专业 Id：@majorIdText</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(isNationalText))
+                {
+                    <span class="pill-badge me-1">类型：@(isNationalText == "true" ? "国家线" : "院校/专业线")</span>
+                }
+            }
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted">院校 Id（可选）</label>
+                <input class="form-control" placeholder="限定某一院校" @bind="schoolIdText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">专业 Id（可选）</label>
+                <input class="form-control" placeholder="限定某一专业" @bind="majorIdText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">年份</label>
+                <input class="form-control" placeholder="如 2025" @bind="yearText" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">类型</label>
+                <select class="form-control" @bind="isNationalText">
+                    <option value="">全部</option>
+                    <option value="true">国家线</option>
+                    <option value="false">非国家线</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-grid">
+                <button class="btn btn-primary" @onclick="Load" disabled="@loading">
+                    @(loading ? "查询中..." : "查询")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-warning">@error</div>
+}
+
+<div class="card card-soft">
+    <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+        <div>
+            <strong>分数线列表</strong>
+            <span class="ms-2 text-muted small">
+                共 @(items?.Count ?? 0) 条记录
+            </span>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        @if (loading)
+        {
+            <div class="p-3 text-muted">加载中...</div>
+        }
+        else if (items is null || !items.Any())
+        {
+            <div class="p-3 text-muted">暂无数据，请调整筛选条件后重试。</div>
+        }
+        else
+        {
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>年份</th>
+                        <th>分数</th>
+                        <th>类型</th>
+                        <th>院校</th>
+                        <th>专业</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var x in items)
+                    {
+                        <tr>
+                            <td>@x.Year</td>
+                            <td>@x.Score</td>
+                            <td>
+                                <span class="pill-badge pill-badge-muted">
+                                    @(x.IsNational ? "国家线" : "院校/专业线")
+                                </span>
+                            </td>
+                            <td>@(x.SchoolName ?? "-")</td>
+                            <td>@(x.MajorName ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+</RequireLogin>
+@code {
+    private bool loading;
+    private string schoolIdText = "";
+    private string majorIdText = "";
+    private string yearText = "";
+    private string isNationalText = "";
+    private List<ScoreLineListItemDto>? items;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        loading = true;
+        try
+        {
+            int? schoolId = int.TryParse(schoolIdText, out var sid) ? sid : null;
+            int? majorId = int.TryParse(majorIdText, out var mid) ? mid : null;
+            int? year = int.TryParse(yearText, out var y) ? y : null;
+            bool? isNational = bool.TryParse(isNationalText, out var n) ? n : null;
+
+            items = await ScoreLinesApi.SearchAsync(schoolId, majorId, year, isNational);
+        }
+        catch (ApiException ex)
+        {
+            items = new List<ScoreLineListItemDto>();
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+}

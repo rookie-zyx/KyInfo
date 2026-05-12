@@ -1,0 +1,8 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Local secrets (do not commit)
+**/appsettings.Local.json
+**/appsettings.*.local.json
+

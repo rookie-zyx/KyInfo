@@ -1,0 +1,244 @@
+@page "/examscores"
+@using KyInfo.Contracts.ExamScores
+@using KyInfo.Blazor.ApiClient
+@inject ExamScoresApiClient ExamScoresApi
+@inject NavigationManager Navigation
+
+<PageTitle>我的成绩</PageTitle>
+
+<RequireLogin>
+<div class="section-header">
+    <div class="section-header-title">
+        <h1>我的成绩</h1>
+        <span class="pill-badge">维护个人总分记录，配合智能志愿推荐使用</span>
+    </div>
+    <div class="text-muted small section-tagline">
+        查询某个用户的历史成绩，或录入新的考试成绩（支持绑定院校和专业）。
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card card-soft h-100">
+            <div class="card-header card-soft-header">
+                <strong>查询成绩</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label small text-muted">用户 Id（必填）</label>
+                        <input class="form-control" placeholder="输入用户 Id" @bind="userIdText" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">年份（可选）</label>
+                        <input class="form-control" placeholder="如 2025" @bind="yearText" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">院校 Id（可选）</label>
+                        <input class="form-control" placeholder="限定院校" @bind="schoolIdText" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">专业 Id（可选）</label>
+                        <input class="form-control" placeholder="限定专业" @bind="majorIdText" />
+                    </div>
+                </div>
+                <div class="mt-3 d-flex justify-content-between align-items-center">
+                    <button class="btn btn-primary" @onclick="Load" disabled="@loading">
+                        @(loading ? "查询中..." : "查询")
+                    </button>
+                    <span class="text-muted small">
+                        当前记录数：@(list?.Count ?? 0)
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-soft h-100">
+            <div class="card-header card-soft-header">
+                <strong>新增成绩</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">用户 Id *</label>
+                        <input class="form-control" @bind="newUserId" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">年份 *</label>
+                        <input class="form-control" @bind="newYear" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">总分 *</label>
+                        <input class="form-control" @bind="newTotalScore" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">院校 Id（可选）</label>
+                        <input class="form-control" @bind="newSchoolId" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">专业 Id（可选）</label>
+                        <input class="form-control" @bind="newMajorId" />
+                    </div>
+                </div>
+                <div class="mt-3 d-flex align-items-center gap-2">
+                    <button class="btn btn-success" @onclick="Create" disabled="@saving">
+                        @(saving ? "保存中..." : "保存")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-warning">@error</div>
+}
+
+@if (loading && list is null)
+{
+    <p>加载中...</p>
+}
+else if (list is null)
+{
+    <p class="text-muted">输入用户 Id 后点击查询。</p>
+}
+else if (!list.Any())
+{
+    <p>暂无成绩记录。</p>
+}
+else
+{
+    <div class="card card-soft">
+        <div class="card-header card-soft-header">
+            <strong>成绩列表</strong>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>年份</th>
+                        <th>总分</th>
+                        <th>用户</th>
+                        <th>院校</th>
+                        <th>专业</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var x in list)
+                    {
+                        <tr>
+                            <td>@x.Year</td>
+                            <td>@x.TotalScore</td>
+                            <td>@x.UserName</td>
+                            <td>@(x.SchoolName ?? "-")</td>
+                            <td>@(x.MajorName ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+</RequireLogin>
+@code {
+    private bool loading;
+    private bool saving;
+    private string? error;
+    private bool redirecting;
+    private string userIdText = "";
+    private string yearText = "";
+    private string schoolIdText = "";
+    private string majorIdText = "";
+    private List<ExamScoreListItemDto>? list;
+
+    private string newUserId = "";
+    private string newYear = "";
+    private string newTotalScore = "";
+    private string newSchoolId = "";
+    private string newMajorId = "";
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || redirecting)
+        {
+            return Task.CompletedTask;
+        }
+
+        // `/examscores` 旧页面已被 `我的档案(account)` 一体化替代：保持兼容但直接跳转。
+        redirecting = true;
+        Navigation.NavigateTo("/account", forceLoad: false);
+        return Task.CompletedTask;
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        if (!int.TryParse(userIdText, out var uid))
+        {
+            list = new List<ExamScoreListItemDto>();
+            return;
+        }
+        loading = true;
+        try
+        {
+            int? year = int.TryParse(yearText, out var y) ? y : null;
+            int? schoolId = int.TryParse(schoolIdText, out var sid) ? sid : null;
+            int? majorId = int.TryParse(majorIdText, out var mid) ? mid : null;
+
+            list = await ExamScoresApi.SearchAsync(uid, year, schoolId, majorId);
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+            list = new List<ExamScoreListItemDto>();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Create()
+    {
+        error = null;
+        if (!int.TryParse(newUserId, out var uid) || !int.TryParse(newYear, out var y) || !int.TryParse(newTotalScore, out var total))
+        {
+            error = "请填写有效的 用户Id / 年份 / 总分。";
+            return;
+        }
+        saving = true;
+        try
+        {
+            var dto = new ExamScoreCreateDto
+            {
+                UserId = uid,
+                Year = y,
+                TotalScore = total,
+                SchoolId = int.TryParse(newSchoolId, out var sid) ? (int?)sid : null,
+                MajorId = int.TryParse(newMajorId, out var mid) ? (int?)mid : null
+            };
+
+            await ExamScoresApi.CreateAsync(dto);
+            newYear = "";
+            newTotalScore = "";
+            newSchoolId = "";
+            newMajorId = "";
+            if (int.TryParse(userIdText, out _))
+            {
+                await Load();
+            }
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+}

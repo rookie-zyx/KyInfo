@@ -1,0 +1,203 @@
+@page "/recommendations"
+@using KyInfo.Contracts.Recommendations
+@using KyInfo.Blazor.ApiClient
+@inject RecommendationsApiClient RecommendationsApi
+
+<PageTitle>智能志愿推荐</PageTitle>
+
+<RequireLogin>
+<div class="section-header">
+    <div class="section-header-title">
+        <h1>智能志愿推荐</h1>
+        <span class="pill-badge">基于分数线的冲刺 / 匹配 / 保底分层推荐</span>
+    </div>
+    <div class="text-muted small section-tagline">
+        选择用户与年份，系统根据历史分数线自动计算与你分数差距，生成分档志愿清单。
+    </div>
+</div>
+
+<div class="card card-soft mb-3">
+    <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+        <div>
+            <strong>推荐条件</strong>
+            <span class="ms-2 text-muted small">
+                当前档位过滤：
+                @if (string.IsNullOrEmpty(filterLevel))
+                {
+                    <span class="pill-badge pill-badge-muted">全部档位</span>
+                }
+                else
+                {
+                    <span class="pill-badge">@filterLevel</span>
+                }
+            </span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted">用户 Id</label>
+                <input class="form-control" placeholder="输入已录入成绩的用户 Id" @bind="userIdText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">年份（可选）</label>
+                <input class="form-control" placeholder="留空则自动取最近一年" @bind="yearText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">志愿档位</label>
+                <select class="form-control" @bind="filterLevel">
+                    <option value="">全部档位</option>
+                    <option value="冲刺">冲刺</option>
+                    <option value="匹配">匹配</option>
+                    <option value="保底">保底</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-grid">
+                <button class="btn btn-primary" @onclick="Load" disabled="@loading">
+                    @(loading ? "计算中..." : "生成推荐")
+                </button>
+            </div>
+        </div>
+        @if (error is not null)
+        {
+            <div class="alert alert-warning mt-3 mb-0">@error</div>
+        }
+    </div>
+</div>
+
+@if (result is null && !loading)
+{
+    <p class="text-muted">请输入用户 Id，并点击“生成推荐”。系统将根据该用户的总分与各院校专业的分数线，生成冲刺 / 匹配 / 保底建议清单。</p>
+}
+else if (loading)
+{
+    <p>正在根据你的分数和分数线智能匹配志愿，请稍候...</p>
+}
+else if (result is not null && (result.Items is null || !result.Items.Any()))
+{
+    <p>暂时没有可推荐的志愿，请检查是否已录入成绩和分数线。</p>
+}
+else if (result is not null)
+{
+    <div class="card card-soft mb-3">
+        <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
+            <div>
+                <strong>推荐概览</strong>
+                <span class="ms-2 text-muted small">
+                    用户：@result.UserName (@result.UserId) · 年份：@result.Year · 总分：@result.UserTotalScore
+                </span>
+            </div>
+            <div class="text-muted small">
+                共 @result.Items.Count 条推荐
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="small text-muted">
+                <span class="pill-badge me-1">冲刺：略低于分数线，建议谨慎填报</span>
+                <span class="pill-badge me-1">匹配：与分数线接近，优先推荐</span>
+                <span class="pill-badge pill-badge-muted">保底：明显高于分数线，稳妥选择</span>
+            </div>
+        </div>
+    </div>
+
+    @foreach (var group in GroupedItems)
+    {
+        <h4 class="mt-3 d-flex align-items-center">
+            <span>@group.Key 志愿</span>
+            <small class="text-muted ms-2">（@group.Count() 个推荐）</small>
+        </h4>
+        <div class="row row-cols-1 row-cols-md-2 g-3">
+            @foreach (var item in group)
+            {
+                <div class="col">
+                    <div class="card card-soft h-100">
+                        <div class="card-body">
+                            <h5 class="card-title d-flex justify-content-between align-items-center">
+                                <span>
+                                    @item.SchoolName
+                                    @if (!string.IsNullOrEmpty(item.SchoolShortName))
+                                    {
+                                        <span>（@item.SchoolShortName）</span>
+                                    }
+                                </span>
+                                <span class="pill-badge pill-badge-muted">@item.LevelTag</span>
+                            </h5>
+                            <h6 class="card-subtitle mb-2 text-muted">
+                                @item.MajorName (@item.MajorCode)
+                            </h6>
+                            <p class="card-text mb-1">
+                                @item.Province @item.City · @item.DisciplineCategory · @item.DegreeType · @item.StudyType
+                            </p>
+                            <p class="card-text mb-2">
+                                <span class="pill-badge me-2">分数线：@item.ScoreLine</span>
+                                <span class="pill-badge pill-badge-muted">与你差值：@item.ScoreDiff</span>
+                            </p>
+                            @if (item.TuitionPerYear.HasValue)
+                            {
+                                <p class="card-text mb-0">
+                                    学费约：@item.TuitionPerYear.Value 元/年，学制 @item.DurationYears 年
+                                </p>
+                            }
+                            else
+                            {
+                                <p class="card-text mb-0">
+                                    学制 @item.DurationYears 年
+                                </p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+</RequireLogin>
+@code {
+    private bool loading;
+    private string userIdText = "";
+    private string yearText = "";
+    private string filterLevel = "";
+    private RecommendationResponseDto? result;
+    private string? error;
+
+    private IEnumerable<IGrouping<string, RecommendationItemDto>> GroupedItems =>
+        (result?.Items ?? Enumerable.Empty<RecommendationItemDto>())
+            .Where(x => string.IsNullOrEmpty(filterLevel) || x.Level == filterLevel)
+            .GroupBy(x => x.Level)
+            .OrderBy(g => g.Key == "冲刺" ? 0 : g.Key == "匹配" ? 1 : 2);
+
+    private async Task Load()
+    {
+        error = null;
+        result = null;
+
+        if (!int.TryParse(userIdText, out var userId))
+        {
+            error = "请先输入有效的用户 Id。";
+            return;
+        }
+
+        int? year = null;
+        if (int.TryParse(yearText, out var y))
+        {
+            year = y;
+        }
+
+        loading = true;
+        try
+        {
+            result = await RecommendationsApi.GetAsync(userId, year);
+        }
+        catch (ApiException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+}
+

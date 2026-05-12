@@ -1,0 +1,206 @@
+@using KyInfo.Blazor.ApiClient
+@using KyInfo.Blazor.Auth
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject AccountApiClient AccountApi
+@inject KyInfo.Blazor.Auth.TokenStore TokenStore
+
+@if (!checkedState)
+{
+    <p class="text-muted">正在检查管理员权限...</p>
+}
+else if (!isAdmin)
+{
+    <div class="alert alert-warning" role="alert">
+        无权限访问该页面，正在跳转...
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter]
+    public RenderFragment ChildContent { get; set; } = default!;
+
+    private bool checkedState;
+    private bool isAdmin;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Blazor Server 水合阶段可能出现局部 JS 不可用：如果读取失败不要立即重定向，
+        // 也不要因为 firstRender=false 而停止重试；直到 checkedState=true 才结束。
+        if (checkedState)
+        {
+            return;
+        }
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                TokenStore.Token = null;
+                var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+                var returnUrl = "/" + relative;
+                Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: false);
+                checkedState = true;
+                StateHasChanged();
+                return;
+            }
+
+            // 关键点：后续调用 /api/Account/me 时，Authorization 头由 TokenDelegatingHandler 生成。
+            // 该处理程序优先使用 TokenStore.Token；同步一下可以避免 JS 时序导致 401。
+            TokenStore.Token = token;
+
+            // 优先从 JWT 解析 role：避免 localStorage/JS 时序问题导致管理员页不显示。
+            var jwtRole = TryReadRoleFromJwt(token);
+            isAdmin = AdminAreaRoles.IsStaff(jwtRole);
+
+            // 如果 JWT 里没有 role（或解析失败），再用本地缓存兜底。
+            if (!isAdmin)
+            {
+                var localRole = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_role");
+                if (!string.IsNullOrWhiteSpace(localRole))
+                {
+                    isAdmin = AdminAreaRoles.IsStaff(localRole);
+                }
+            }
+
+            // 再用后端的 /api/Account/me 做最终校验，避免 localStorage["kyinfo_role"] 失效或陈旧导致前后端不一致。
+            try
+            {
+                var me = await AccountApi.GetMeAsync();
+                isAdmin = AdminAreaRoles.IsStaff(me.Role);
+            }
+            catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                // 关键：只有 JWT 真过期时才清空本地登录态并退出登录。
+                // 否则短时 401（例如水合/时序问题）会把你误踢回登录页。
+                var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
+                if (expired)
+                {
+                    await ClearLocalLoginStateAsync();
+                    TokenStore.Token = null;
+                    Navigation.NavigateTo("/login", forceLoad: false);
+                }
+                else
+                {
+                    // 非过期 401：保持 localRole 推断的 isAdmin，并允许本页渲染。
+                    checkedState = true;
+                    StateHasChanged();
+                    return;
+                }
+                checkedState = true;
+                StateHasChanged();
+                return;
+            }
+
+            if (!isAdmin)
+            {
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+        }
+        catch
+        {
+            // JS 读取失败：保持 checkedState=false，避免误重定向（等待下一次渲染重试）。
+            return;
+        }
+
+        checkedState = true;
+        StateHasChanged();
+    }
+
+    private async Task ClearLocalLoginStateAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_token");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_userName");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_role");
+        }
+        catch
+        {
+            // 忽略 localStorage 清理失败
+        }
+    }
+
+    private static bool IsJwtExpired(string token)
+    {
+        try
+        {
+            // JWT: header.payload.signature
+            var parts = token.Split('.');
+            if (parts.Length < 2)
+            {
+                return true;
+            }
+
+            var payload = parts[1];
+            // Base64Url -> Base64
+            payload = payload.Replace('-', '+').Replace('_', '/');
+            // Pad
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("exp", out var expEl) && expEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+            {
+                var exp = expEl.GetInt64();
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                return exp <= now;
+            }
+
+            // 没有 exp 时保守：不要清理，避免循环
+            return false;
+        }
+        catch
+        {
+            // 解析失败也不要清理，避免循环
+            return false;
+        }
+    }
+
+    private static string? TryReadRoleFromJwt(string token)
+    {
+        try
+        {
+            // JWT: header.payload.signature
+            var parts = token.Split('.');
+            if (parts.Length < 2)
+            {
+                return null;
+            }
+
+            var payload = parts[1];
+            // Base64Url -> Base64
+            payload = payload.Replace('-', '+').Replace('_', '/');
+            // Pad
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                return roleEl.GetString();
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}

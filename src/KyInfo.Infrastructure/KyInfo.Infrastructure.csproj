@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.24" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.24" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.24" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\\KyInfo.Domain\\KyInfo.Domain.csproj" />
+    <ProjectReference Include="..\\KyInfo.Contracts\\KyInfo.Contracts.csproj" />
+    <ProjectReference Include="..\\KyInfo.Application\\KyInfo.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      将原本位于 KyInfo.Api\Migrations 的 EF Core 迁移代码，
+      编译进 Infrastructure 层的 Persistence\Migrations 目录（通过 Link 呈现层次）。
+      这样下一步可以逐步将迁移也“物理定位”为 Infrastructure。
+    -->
+    <Compile Include="..\\..\\KyInfo.Api\\Migrations\\**\\*.cs"
+             Link="Persistence\\Migrations\\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
