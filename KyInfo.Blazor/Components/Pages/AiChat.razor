@@ -3,6 +3,7 @@
 @using KyInfo.Blazor.ApiClient
 @inject AiChatApiClient AiChatApi
 @inject IJSRuntime JS
+@inject KyInfo.Blazor.Auth.TokenStore TokenStore
 
 
 <PageTitle>AI 助手</PageTitle>
@@ -171,17 +172,26 @@
 
         try
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-            if (string.IsNullOrWhiteSpace(token))
+            var session = await JS.InvokeAsync<KyInfo.Blazor.Auth.BrowserAuthResult>("kyinfoAuth.getSession");
+            if (session.Session?.IsAuthenticated != true)
             {
                 throw new ApiException(System.Net.HttpStatusCode.Unauthorized, "登录状态已失效，请重新登录后再试。");
+            }
+
+            if (!string.IsNullOrWhiteSpace(session.Session.Token))
+            {
+                TokenStore.SetAuthenticated(
+                    session.Session.Token,
+                    session.Session.UserName,
+                    session.Session.Role,
+                    session.Session.UserId);
             }
 
             var payload = new AiChatRequestDto
             {
                 Messages = messages.Select(m => new AiChatMessageDto { Role = m.Role, Content = m.Content }).ToList()
             };
-            var result = await AiChatApi.ChatAsync(payload, token);
+            var result = await AiChatApi.ChatAsync(payload, TokenStore.Token);
             messages.Add(new ChatTurn { Role = "assistant", Content = result.Reply.Trim() });
         }
         catch (ApiException ex)

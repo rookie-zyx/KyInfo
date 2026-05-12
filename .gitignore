@@ -1,6 +1,9 @@
 # Build outputs
 **/bin/
 **/obj/
+.vs/
+*.user
+*.suo
 
 # Local secrets (do not commit)
 **/appsettings.Local.json

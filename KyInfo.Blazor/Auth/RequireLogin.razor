@@ -36,9 +36,32 @@ else
 
         try
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-            TokenStore.Token = string.IsNullOrWhiteSpace(token) ? null : token;
-            isLoggedIn = !string.IsNullOrWhiteSpace(token);
+            var auth = await JS.InvokeAsync<BrowserAuthResult>("kyinfoAuth.getSession");
+            if (auth.Session?.IsAuthenticated != true)
+            {
+                TokenStore.Clear();
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(auth.Session.Token))
+                {
+                    TokenStore.SetAuthenticated(
+                        auth.Session.Token,
+                        auth.Session.UserName,
+                        auth.Session.Role,
+                        auth.Session.UserId);
+                }
+                else if (auth.Session.UserId.HasValue &&
+                    !string.IsNullOrWhiteSpace(auth.Session.UserName) &&
+                    !string.IsNullOrWhiteSpace(auth.Session.Role))
+                {
+                    TokenStore.SetProfile(
+                        auth.Session.UserId.Value,
+                        auth.Session.UserName,
+                        auth.Session.Role);
+                }
+            }
+            isLoggedIn = auth.Session?.IsAuthenticated == true;
             checkedToken = true;
         }
         catch
@@ -58,4 +81,3 @@ else
         StateHasChanged();
     }
 }
-

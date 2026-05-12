@@ -68,9 +68,6 @@
     private string? successMessage;
 
     [Inject]
-    private AuthApiClient AuthApi { get; set; } = default!;
-
-    [Inject]
     private AccountApiClient AccountApi { get; set; } = default!;
 
     [Inject]
@@ -103,31 +100,42 @@
 
         try
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-            if (!string.IsNullOrWhiteSpace(token))
+            var session = await JS.InvokeAsync<BrowserAuthResult>("kyinfoAuth.getSession");
+            if (session.Ok && session.Session?.IsAuthenticated == true)
             {
-                // 如果本地 token 存在，需要用后端校验一次，避免“token 失效但仍跳转”的错误链路。
+                if (!string.IsNullOrWhiteSpace(session.Session.Token))
+                {
+                    TokenStore.SetAuthenticated(
+                        session.Session.Token,
+                        session.Session.UserName,
+                        session.Session.Role,
+                        session.Session.UserId);
+                }
+                else if (session.Session.UserId.HasValue &&
+                    !string.IsNullOrWhiteSpace(session.Session.UserName) &&
+                    !string.IsNullOrWhiteSpace(session.Session.Role))
+                {
+                    TokenStore.SetProfile(
+                        session.Session.UserId.Value,
+                        session.Session.UserName,
+                        session.Session.Role);
+                }
+
                 var target = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
                 try
                 {
-                    var me = await AccountApi.GetMeAsync();
+                    var me = await AccountApi.GetMeAsync(TokenStore.Token);
                     if (me is not null)
                     {
+                        TokenStore.SetProfile(me.Id, me.UserName, me.Role);
                         Navigation.NavigateTo(target, forceLoad: false);
                         return;
                     }
                 }
                 catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 {
-                    // 不要把“短时 401（可能是 token 注入尚未就绪）”直接当成 token 已过期。
-                    // 只有当 JWT 的 exp 明确过期时才清理 localStorage，避免登录页形成循环。
-                    var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
-                    if (expired)
-                    {
-                        await ClearLocalLoginStateAsync();
-                    }
-
-                    errorMessage = expired ? "登录已过期，请重新登录。" : "登录状态暂时不可用，请稍后重试。";
+                    await ClearLocalLoginStateAsync();
+                    errorMessage = "登录状态已失效，请重新登录。";
                     StateHasChanged();
                 }
             }
@@ -138,57 +146,16 @@
         }
     }
 
-    private static bool IsJwtExpired(string token)
-    {
-        try
-        {
-            // JWT: header.payload.signature
-            var parts = token.Split('.');
-            if (parts.Length < 2)
-            {
-                return true;
-            }
-
-            var payload = parts[1];
-            // Base64Url -> Base64
-            payload = payload.Replace('-', '+').Replace('_', '/');
-            // Pad
-            switch (payload.Length % 4)
-            {
-                case 2: payload += "=="; break;
-                case 3: payload += "="; break;
-            }
-
-            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("exp", out var expEl) && expEl.ValueKind == System.Text.Json.JsonValueKind.Number)
-            {
-                var exp = expEl.GetInt64();
-                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                return exp <= now;
-            }
-
-            // 没有 exp 时保守：不要清理，避免循环
-            return false;
-        }
-        catch
-        {
-            // 解析失败也不要清理，避免循环
-            return false;
-        }
-    }
-
     private async Task ClearLocalLoginStateAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_token");
-            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_userName");
-            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_role");
+            await JS.InvokeAsync<BrowserAuthResult>("kyinfoAuth.logout");
+            TokenStore.Clear();
         }
         catch
         {
-            // 忽略 localStorage 清理失败
+            // 忽略退出清理失败
         }
     }
 
@@ -200,21 +167,35 @@
 
         try
         {
-            var auth = await AuthApi.LoginAsync(loginModel);
+            var auth = await JS.InvokeAsync<BrowserAuthResult>("kyinfoAuth.login", loginModel);
+            if (!auth.Ok || auth.Session?.IsAuthenticated != true)
+            {
+                errorMessage = auth.Message ?? "登录失败，请稍后再试。";
+                return;
+            }
 
-            await JS.InvokeVoidAsync("localStorage.setItem", "kyinfo_token", auth.Token);
-            await JS.InvokeVoidAsync("localStorage.setItem", "kyinfo_userName", auth.UserName ?? string.Empty);
-            await JS.InvokeVoidAsync("localStorage.setItem", "kyinfo_role", auth.Role ?? string.Empty);
-
-            // 登录成功后立即写入会话缓存，后续 API 请求优先从缓存读取 token，
-            // 避免 localStorage/JS 读取时机问题导致请求带不上 Authorization。
-            TokenStore.Token = auth.Token;
+            if (!string.IsNullOrWhiteSpace(auth.Session.Token))
+            {
+                TokenStore.SetAuthenticated(
+                    auth.Session.Token,
+                    auth.Session.UserName,
+                    auth.Session.Role,
+                    auth.Session.UserId);
+            }
+            else if (auth.Session.UserId.HasValue &&
+                !string.IsNullOrWhiteSpace(auth.Session.UserName) &&
+                !string.IsNullOrWhiteSpace(auth.Session.Role))
+            {
+                TokenStore.SetProfile(
+                    auth.Session.UserId.Value,
+                    auth.Session.UserName,
+                    auth.Session.Role);
+            }
 
             successMessage = "登录成功，正在跳转…";
 
             await Task.Delay(800);
             var target = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
-            // 避免强制整页刷新导致 TokenStore（会话缓存）丢失，并减少 JS/localStorage 注入时序问题。
             Navigation.NavigateTo(target, forceLoad: false);
         }
         catch (ApiException ex)

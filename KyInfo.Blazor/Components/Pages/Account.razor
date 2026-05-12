@@ -6,6 +6,7 @@
 @inject ExamScoresApiClient ExamScoresApi
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject KyInfo.Blazor.Auth.TokenStore TokenStore
 
 <PageTitle>我的账户 - KyInfo</PageTitle>
 
@@ -226,6 +227,7 @@
     private string newScoreMajorId = string.Empty;
     private string? scoreMessage;
     private bool scoreMessageOk;
+    private string? currentAccessToken;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -234,11 +236,10 @@
             return;
         }
 
-        // 防止首次水合阶段 localStorage 读取/Token 注入尚未就绪就先发起受保护 API 调用，
-        // 导致 401 -> 跳回登录页形成循环。
+        // 等浏览器侧会话状态可用后再加载受保护数据。
         try
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
+            var token = await GetAccessTokenAsync();
             if (string.IsNullOrWhiteSpace(token))
             {
                 return;
@@ -262,7 +263,9 @@
         bannerError = null;
         try
         {
-            profile = await AccountApi.GetMeAsync();
+            var token = await RequireAccessTokenAsync();
+            profile = await AccountApi.GetMeAsync(token);
+            TokenStore.SetProfile(profile.Id, profile.UserName, profile.Role);
 
             editUserName = profile.UserName;
             editEmail = profile.Email;
@@ -271,18 +274,8 @@
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            // 只有 JWT 过期才清理本地登录态并退出登录。
-            // 非过期的 401 可能是水合/时序导致的短暂失败，避免把用户误踢回登录页。
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-            var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
-            if (expired)
-            {
-                await ClearLocalLoginStateAsync();
-                Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
-                return;
-            }
-
-            loadError = "登录状态暂时不可用，请稍后重试。";
+            await ClearLocalLoginStateAsync();
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
             loadingProfile = false;
             return;
         }
@@ -314,12 +307,13 @@
         savingProfile = true;
         try
         {
+            var token = await RequireAccessTokenAsync();
             var body = new UpdateAccountRequest { UserName = editUserName, Email = editEmail };
-            var updated = await AccountApi.UpdateProfileAsync(body);
+            var updated = await AccountApi.UpdateProfileAsync(body, token);
             profile = updated;
             editUserName = updated.UserName;
             editEmail = updated.Email;
-            await JS.InvokeVoidAsync("localStorage.setItem", "kyinfo_userName", updated.UserName);
+            TokenStore.SetProfile(updated.Id, updated.UserName, updated.Role);
 
             profileOk = true;
             profileMessage = "已保存。";
@@ -327,18 +321,8 @@
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-            var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
-            if (expired)
-            {
-                await ClearLocalLoginStateAsync();
-                Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
-            }
-            else
-            {
-                profileOk = false;
-                profileMessage = "登录状态暂时不可用，请稍后重试。";
-            }
+            await ClearLocalLoginStateAsync();
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
         }
         catch (ApiException ex)
         {
@@ -370,8 +354,9 @@
         savingPassword = true;
         try
         {
+            var token = await RequireAccessTokenAsync();
             var body = new ChangePasswordRequest { CurrentPassword = currentPassword, NewPassword = newPassword };
-            await AccountApi.ChangePasswordAsync(body);
+            await AccountApi.ChangePasswordAsync(body, token);
 
             passwordOk = true;
             passwordMessage = "密码已更新。";
@@ -382,18 +367,8 @@
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-            var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
-            if (expired)
-            {
-                await ClearLocalLoginStateAsync();
-                Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
-            }
-            else
-            {
-                passwordOk = false;
-                passwordMessage = "登录状态暂时不可用，请稍后重试。";
-            }
+            await ClearLocalLoginStateAsync();
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
         }
         catch (ApiException ex)
         {
@@ -423,24 +398,16 @@
         scoreMessage = null;
         try
         {
+            var token = await RequireAccessTokenAsync();
             var year = int.TryParse(scoreYearText, out var y) ? (int?)y : null;
-            examScores = await ExamScoresApi.SearchAsync(profile.Id, year, null, null);
+            examScores = await ExamScoresApi.SearchAsync(profile.Id, year, null, null, token);
         }
         catch (ApiException ex)
         {
             if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-                var expired = !string.IsNullOrWhiteSpace(token) && IsJwtExpired(token!);
-                if (expired)
-                {
-                    await ClearLocalLoginStateAsync();
-                    Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
-                    return;
-                }
-
-                scoresError = "登录状态暂时不可用，请稍后重试。";
-                examScores = new List<ExamScoreListItemDto>();
+                await ClearLocalLoginStateAsync();
+                Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/account")}", forceLoad: false);
                 return;
             }
 
@@ -478,6 +445,7 @@
         savingScore = true;
         try
         {
+            var token = await RequireAccessTokenAsync();
             var dto = new ExamScoreCreateDto
             {
                 UserId = profile.Id,
@@ -487,7 +455,7 @@
                 MajorId = int.TryParse(newScoreMajorId, out var mid) ? (int?)mid : null
             };
 
-            await ExamScoresApi.CreateAsync(dto);
+            await ExamScoresApi.CreateAsync(dto, token);
             scoreMessageOk = true;
             scoreMessage = "成绩已新增。";
             newScoreYear = string.Empty;
@@ -516,54 +484,46 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_token");
-            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_userName");
-            await JS.InvokeVoidAsync("localStorage.removeItem", "kyinfo_role");
+            await JS.InvokeAsync<KyInfo.Blazor.Auth.BrowserAuthResult>("kyinfoAuth.logout");
+            TokenStore.Clear();
         }
         catch
         {
-            // Ignore localStorage errors
+            // Ignore logout failures during cleanup
         }
     }
 
-    private static bool IsJwtExpired(string token)
+    private async Task<string?> GetAccessTokenAsync()
     {
-        try
+        if (!string.IsNullOrWhiteSpace(currentAccessToken))
         {
-            // JWT: header.payload.signature
-            var parts = token.Split('.');
-            if (parts.Length < 2)
-            {
-                return true;
-            }
-
-            var payload = parts[1];
-            // Base64Url -> Base64
-            payload = payload.Replace('-', '+').Replace('_', '/');
-            // Pad
-            switch (payload.Length % 4)
-            {
-                case 2: payload += "=="; break;
-                case 3: payload += "="; break;
-            }
-
-            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("exp", out var expEl) && expEl.ValueKind == System.Text.Json.JsonValueKind.Number)
-            {
-                var exp = expEl.GetInt64();
-                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                return exp <= now;
-            }
-
-            // 没有 exp 时保守：不要清理，避免循环
-            return false;
+            return currentAccessToken;
         }
-        catch
+
+        var auth = await JS.InvokeAsync<KyInfo.Blazor.Auth.BrowserAuthResult>("kyinfoAuth.getSession");
+        if (auth.Session?.IsAuthenticated != true || string.IsNullOrWhiteSpace(auth.Session.Token))
         {
-            // 解析失败也不要清理，避免循环
-            return false;
+            currentAccessToken = null;
+            return null;
         }
+
+        currentAccessToken = auth.Session.Token;
+        TokenStore.SetAuthenticated(
+            auth.Session.Token,
+            auth.Session.UserName,
+            auth.Session.Role,
+            auth.Session.UserId);
+        return currentAccessToken;
     }
 
+    private async Task<string> RequireAccessTokenAsync()
+    {
+        var token = await GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new ApiException(System.Net.HttpStatusCode.Unauthorized, "登录状态已失效，请重新登录后再试。");
+        }
+
+        return token;
+    }
 }

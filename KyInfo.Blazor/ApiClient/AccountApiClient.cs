@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using KyInfo.Contracts.Account;
 
@@ -12,9 +13,10 @@ public sealed class AccountApiClient
         _http = http;
     }
 
-    public async Task<AccountProfileDto> GetMeAsync(CancellationToken cancellationToken = default)
+    public async Task<AccountProfileDto> GetMeAsync(string? token = null, CancellationToken cancellationToken = default)
     {
-        var response = await _http.GetAsync("api/Account/me", cancellationToken);
+        using var request = CreateRequest(HttpMethod.Get, "api/Account/me", token);
+        var response = await _http.SendAsync(request, cancellationToken);
         await response.EnsureSuccessOrThrowAsync("无法加载账户信息。");
 
         var dto = await response.Content.ReadFromJsonAsync<AccountProfileDto>(cancellationToken: cancellationToken);
@@ -26,9 +28,14 @@ public sealed class AccountApiClient
         return dto;
     }
 
-    public async Task<AccountProfileDto> UpdateProfileAsync(UpdateAccountRequest request, CancellationToken cancellationToken = default)
+    public async Task<AccountProfileDto> UpdateProfileAsync(
+        UpdateAccountRequest request,
+        string? token = null,
+        CancellationToken cancellationToken = default)
     {
-        var response = await _http.PutAsJsonAsync("api/Account/profile", request, cancellationToken);
+        using var httpRequest = CreateRequest(HttpMethod.Put, "api/Account/profile", token);
+        httpRequest.Content = JsonContent.Create(request);
+        var response = await _http.SendAsync(httpRequest, cancellationToken);
         await response.EnsureSuccessOrThrowAsync("保存失败。");
 
         var dto = await response.Content.ReadFromJsonAsync<AccountProfileDto>(cancellationToken: cancellationToken);
@@ -40,10 +47,26 @@ public sealed class AccountApiClient
         return dto;
     }
 
-    public async Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken = default)
+    public async Task ChangePasswordAsync(
+        ChangePasswordRequest request,
+        string? token = null,
+        CancellationToken cancellationToken = default)
     {
-        var response = await _http.PostAsJsonAsync("api/Account/change-password", request, cancellationToken);
+        using var httpRequest = CreateRequest(HttpMethod.Post, "api/Account/change-password", token);
+        httpRequest.Content = JsonContent.Create(request);
+        var response = await _http.SendAsync(httpRequest, cancellationToken);
         await response.EnsureSuccessOrThrowAsync("修改失败。");
+    }
+
+    private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? token)
+    {
+        var request = new HttpRequestMessage(method, url);
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
+        }
+
+        return request;
     }
 }
 

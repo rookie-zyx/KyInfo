@@ -77,6 +77,9 @@
     private IJSRuntime JS { get; set; } = default!;
 
     [Inject]
+    private KyInfo.Blazor.Auth.TokenStore TokenStore { get; set; } = default!;
+
+    [Inject]
     private NavigationManager Navigation { get; set; } = default!;
 
     private string? returnUrl;
@@ -100,9 +103,17 @@
 
         try
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "kyinfo_token");
-            if (!string.IsNullOrWhiteSpace(token))
+            var auth = await JS.InvokeAsync<KyInfo.Blazor.Auth.BrowserAuthResult>("kyinfoAuth.getSession");
+            if (auth.Session?.IsAuthenticated == true)
             {
+                if (!string.IsNullOrWhiteSpace(auth.Session.Token))
+                {
+                    TokenStore.SetAuthenticated(
+                        auth.Session.Token,
+                        auth.Session.UserName,
+                        auth.Session.Role,
+                        auth.Session.UserId);
+                }
                 Navigation.NavigateTo("/");
             }
         }

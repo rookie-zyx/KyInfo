@@ -34,6 +34,49 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         };
+
+        window.kyinfoAuth = {
+            async login(payload) {
+                const response = await fetch('/bff/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json().catch(() => ({}));
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    message: data.message ?? null,
+                    session: data.session ?? null
+                };
+            },
+            async logout() {
+                const response = await fetch('/bff/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json().catch(() => ({}));
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    message: data.message ?? null
+                };
+            },
+            async getSession() {
+                const response = await fetch('/bff/auth/session', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const data = await response.json().catch(() => ({}));
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    message: data.message ?? null,
+                    session: data.session ?? null
+                };
+            }
+        };
     </script>
     <script src="_framework/blazor.web.js"></script>
 </body>
