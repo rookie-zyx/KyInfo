@@ -22,6 +22,7 @@ public sealed class KyInfoApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:ExpireMinutes", "60");
         builder.UseSetting("ConnectionStrings:DefaultConnection", "unused");
         builder.UseSetting("Seed:Admin:Enabled", "false");
+        builder.UseSetting("Rating:UseRedis", "false");
 
         builder.ConfigureServices(services =>
         {

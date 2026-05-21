@@ -22,6 +22,12 @@ public class AppDbContext : DbContext
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<RatingSubject> RatingSubjects => Set<RatingSubject>();
+
+    public DbSet<UserRating> UserRatings => Set<UserRating>();
+
+    public DbSet<RatingScoreDistribution> RatingScoreDistributions => Set<RatingScoreDistribution>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -122,6 +128,39 @@ public class AppDbContext : DbContext
             entity.Property(x => x.Action).HasMaxLength(128);
             entity.Property(x => x.ResourceType).HasMaxLength(64);
             entity.Property(x => x.Summary).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<RatingSubject>(entity =>
+        {
+            entity.HasIndex(x => new { x.SubjectType, x.SubjectId }).IsUnique();
+            entity.Property(x => x.SubjectType).HasMaxLength(64);
+            entity.Property(x => x.AvgScore).HasPrecision(3, 2);
+        });
+
+        modelBuilder.Entity<UserRating>(entity =>
+        {
+            entity.HasIndex(x => new { x.RatingSubjectId, x.UserId }).IsUnique();
+            entity.Property(x => x.Comment).HasMaxLength(500);
+
+            entity.HasOne(x => x.RatingSubject)
+                  .WithMany(s => s.UserRatings)
+                  .HasForeignKey(x => x.RatingSubjectId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.User)
+                  .WithMany()
+                  .HasForeignKey(x => x.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RatingScoreDistribution>(entity =>
+        {
+            entity.HasKey(x => new { x.RatingSubjectId, x.Score });
+
+            entity.HasOne(x => x.RatingSubject)
+                  .WithMany(s => s.ScoreDistributions)
+                  .HasForeignKey(x => x.RatingSubjectId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

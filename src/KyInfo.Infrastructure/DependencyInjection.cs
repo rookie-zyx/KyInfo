@@ -8,7 +8,11 @@ using KyInfo.Infrastructure.Persistence.Repositories.Schools;
 using KyInfo.Infrastructure.Persistence.Repositories.RecruitInfos;
 using KyInfo.Infrastructure.Persistence.Repositories.Majors;
 using KyInfo.Infrastructure.Persistence.Repositories.Audit;
+using KyInfo.Infrastructure.Persistence.Repositories.Ratings;
 using KyInfo.Application.Abstractions.Audit;
+using KyInfo.Application.Abstractions.Caching;
+using KyInfo.Infrastructure.Caching;
+using KyInfo.Infrastructure.Options;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +23,24 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddKyInfoInfrastructure(this IServiceCollection services, IConfiguration config)
     {
+        services.Configure<RatingOptions>(config.GetSection(RatingOptions.SectionName));
+
+        var ratingOptions = config.GetSection(RatingOptions.SectionName).Get<RatingOptions>() ?? new RatingOptions();
+        var redisConnection = config.GetConnectionString("Redis");
+        if (ratingOptions.UseRedis && !string.IsNullOrWhiteSpace(redisConnection))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnection;
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
+
+        services.AddScoped<IRatingCache, RatingCacheService>();
+
         services.AddDbContext<AppDbContext>(options =>
         {
             options.UseSqlServer(config.GetConnectionString("DefaultConnection"));
@@ -49,6 +71,8 @@ public static class DependencyInjection
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+
+        services.AddScoped<IRatingRepository, RatingRepository>();
 
         return services;
     }
