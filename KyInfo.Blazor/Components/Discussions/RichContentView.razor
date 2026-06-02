@@ -1,0 +1,13 @@
+<div class="discussion-rich-content discussion-text">@PlainText</div>
+
+@code {
+    [Parameter]
+    public string? Content { get; set; }
+
+    private string PlainText { get; set; } = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        PlainText = DiscussionContentParser.ToPlainText(Content);
+    }
+}

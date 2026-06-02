@@ -37,12 +37,16 @@ public sealed class ScoreLinesApiClient
         int? schoolId,
         int? majorId,
         bool? isNational,
+        string? schoolName = null,
+        string? majorName = null,
         CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
         if (schoolId.HasValue) query.Add($"schoolId={schoolId.Value}");
         if (majorId.HasValue) query.Add($"majorId={majorId.Value}");
         if (isNational.HasValue) query.Add($"isNational={isNational.Value.ToString().ToLowerInvariant()}");
+        if (!string.IsNullOrWhiteSpace(schoolName)) query.Add($"schoolName={Uri.EscapeDataString(schoolName)}");
+        if (!string.IsNullOrWhiteSpace(majorName)) query.Add($"majorName={Uri.EscapeDataString(majorName)}");
 
         var url = "api/scorelines/trend" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
         var response = await _http.GetAsync(url, cancellationToken);

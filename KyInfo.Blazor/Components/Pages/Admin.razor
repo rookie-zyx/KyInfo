@@ -8,11 +8,8 @@
     <div class="section-header">
         <div class="section-header-title">
             <h1>管理后台</h1>
-            <span class="pill-badge">用户管理 · 成绩 Excel 批量导入</span>
         </div>
-        <div class="text-muted small section-tagline">
-            仅管理员可见：维护系统用户，或通过模板批量导入考试成绩数据。
-        </div>
+        <p class="section-tagline mb-0">维护系统用户，或通过 Excel 模板批量导入考试成绩。</p>
     </div>
 
     @if (!string.IsNullOrEmpty(statusMessage))
@@ -24,78 +21,81 @@
         <div class="alert alert-danger" role="alert">@errorMessage</div>
     }
 
-    <div class="row g-3 mb-4">
-        <div class="col-lg-6">
-            <div class="card card-soft h-100">
-                <div class="card-header card-soft-header">
-                    <strong>新建用户</strong>
-                </div>
-                <div class="card-body">
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">用户名</label>
-                            <input class="form-control" @bind="newUserName" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">邮箱</label>
-                            <input class="form-control" type="email" @bind="newEmail" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">初始密码</label>
-                            <input class="form-control" type="password" @bind="newPassword" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">角色</label>
-                            <select class="form-select" @bind="newRole" disabled>
-                                <option value="User">User</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button class="btn btn-primary" type="button" @onclick="CreateUser" disabled="@busy">
-                            @(busy ? "处理中..." : "创建用户")
-                        </button>
-                    </div>
-                </div>
-            </div>
+    <div class="card card-soft mb-4">
+        <div class="card-header card-soft-header">
+            <strong>用户与数据维护</strong>
         </div>
-        <div class="col-lg-6">
-            <div class="card card-soft h-100">
-                <div class="card-header card-soft-header">
-                    <strong>批量导入成绩（Excel）</strong>
-                </div>
-                <div class="card-body">
-                    <p class="small text-muted mb-2">
-                        请先下载模板，按列填写后上传 .xlsx。必填列：用户Id、年份、总分；可选：政治、英语、数学、专业课、院校Id、专业Id。
-                    </p>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="DownloadTemplate" disabled="@busy">
-                            下载模板
-                        </button>
-                    </div>
-                    <InputFile OnChange="OnExcelFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control" />
-                    @if (lastImportResult is not null)
-                    {
-                        <div class="mt-3 small">
-                            <div>成功：<strong>@lastImportResult.SuccessCount</strong> 条</div>
-                            @if (lastImportResult.Errors.Count > 0)
-                            {
-                                <div class="text-danger mt-1">失败行：</div>
-                                <ul class="mb-0 ps-3">
-                                    @foreach (var e in lastImportResult.Errors.Take(20))
-                                    {
-                                        <li>第 @e.RowNumber 行：@e.Message</li>
-                                    }
-                                    @if (lastImportResult.Errors.Count > 20)
-                                    {
-                                        <li>… 共 @lastImportResult.Errors.Count 条错误</li>
-                                    }
-                                </ul>
-                            }
-                        </div>
-                    }
-                </div>
+        <div class="card-body">
+            <div class="admin-panel-tabs" role="tablist" aria-label="管理操作">
+                <button type="button" role="tab" class="ky-btn ky-btn-tab admin-tab @(adminTab == "create" ? "is-active" : null)" aria-selected="@(adminTab == "create")" @onclick='() => adminTab = "create"'>新建用户</button>
+                <button type="button" role="tab" class="ky-btn ky-btn-tab admin-tab @(adminTab == "import" ? "is-active" : null)" aria-selected="@(adminTab == "import")" @onclick='() => adminTab = "import"'>批量导入</button>
             </div>
+
+            @if (adminTab == "create")
+            {
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="admin-new-username">用户名</label>
+                        <input id="admin-new-username" class="form-control" @bind="newUserName" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="admin-new-email">邮箱</label>
+                        <input id="admin-new-email" class="form-control" type="email" @bind="newEmail" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="admin-new-password">初始密码</label>
+                        <input id="admin-new-password" class="form-control" type="password" @bind="newPassword" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="admin-new-role">角色</label>
+                        <select id="admin-new-role" class="form-select" @bind="newRole" disabled>
+                            <option value="User">User</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3 profile-form-footer">
+                    <button type="button" class="btn btn-primary btn-ky" @onclick="CreateUser" disabled="@busy">
+                        @(busy ? "处理中..." : "创建用户")
+                    </button>
+                </div>
+            }
+            else
+            {
+                <p class="small text-muted mb-3">
+                    请先下载模板，按列填写后上传 .xlsx。必填列：用户Id、年份、总分；可选：政治、英语、数学、专业课、院校Id、专业Id。
+                </p>
+                <div class="ky-btn-group-responsive mb-3">
+                    <button type="button" class="btn btn-outline-secondary btn-ky" @onclick="DownloadTemplate" disabled="@busy">
+                        <span class="bi bi-download" aria-hidden="true"></span> 下载模板
+                    </button>
+                </div>
+                <label class="ky-dropzone d-block mb-0" for="admin-excel-upload">
+                    <span class="bi bi-cloud-arrow-up ky-dropzone-icon d-block" aria-hidden="true"></span>
+                    <p class="ky-dropzone-label">拖拽文件到此处，或点击选择 Excel</p>
+                    <p class="ky-dropzone-hint">支持 .xlsx 格式</p>
+                    <InputFile id="admin-excel-upload" OnChange="OnExcelFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="visually-hidden" />
+                </label>
+                @if (lastImportResult is not null)
+                {
+                    <div class="mt-3 small">
+                        <div>成功：<strong>@lastImportResult.SuccessCount</strong> 条</div>
+                        @if (lastImportResult.Errors.Count > 0)
+                        {
+                            <div class="text-danger mt-1">失败行：</div>
+                            <ul class="mb-0 ps-3">
+                                @foreach (var e in lastImportResult.Errors.Take(20))
+                                {
+                                    <li>第 @e.RowNumber 行：@e.Message</li>
+                                }
+                                @if (lastImportResult.Errors.Count > 20)
+                                {
+                                    <li>… 共 @lastImportResult.Errors.Count 条错误</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+            }
         </div>
     </div>
 
@@ -104,7 +104,14 @@
         <div class="card card-soft mb-4">
             <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
                 <strong>管理员账号（仅 Root）</strong>
-                <button class="btn btn-sm btn-outline-primary" type="button" @onclick="ReloadAdministrators" disabled="@busy">刷新</button>
+                <button type="button"
+                        class="ky-btn ky-btn-ghost-icon"
+                        aria-label="刷新管理员列表"
+                        title="刷新"
+                        @onclick="ReloadAdministrators"
+                        disabled="@busy">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                </button>
             </div>
             <div class="card-body">
                 <p class="small text-muted mb-3">由 Root 创建的管理员可进入本后台并仅维护普通用户；撤权后账号降为普通用户。</p>
@@ -122,7 +129,7 @@
                         <input class="form-control" type="password" @bind="newAdminPassword" disabled="@busy" />
                     </div>
                 </div>
-                <button class="btn btn-primary mb-3" type="button" @onclick="CreateAdministrator" disabled="@busy">创建管理员</button>
+                <button class="btn btn-primary btn-ky mb-3" type="button" @onclick="CreateAdministrator" disabled="@busy">创建管理员</button>
 
                 @if (loadingAdmins)
                 {
@@ -135,7 +142,7 @@
                 else
                 {
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0 align-middle">
+                        <table class="table table-hover table-ky mb-0 align-middle">
                             <thead class="table-light">
                                 <tr>
                                     <th>Id</th>
@@ -167,9 +174,13 @@
     }
 
     <div class="card card-soft">
-        <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
-            <strong>用户列表</strong>
-            <button class="btn btn-sm btn-outline-primary" type="button" @onclick="ReloadUsers" disabled="@busy">刷新</button>
+        <div class="card-header card-soft-header card-header-actions">
+            <button type="button" class="btn btn-outline-secondary btn-ky" @onclick="ReloadUsers" disabled="@busy">
+                <span class="bi bi-arrow-clockwise" aria-hidden="true"></span> 刷新
+            </button>
+            <div class="card-header-title">
+                <strong>用户列表</strong>
+            </div>
         </div>
         <div class="card-body p-0">
             @if (loadingList)
@@ -183,7 +194,7 @@
             else
             {
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0 align-middle">
+                    <table class="table table-hover table-ky mb-0 align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th>Id</th>
@@ -231,7 +242,7 @@
         <div class="card card-soft mt-3">
             <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
                 <strong>修改用户</strong>
-                <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="CancelEdit" disabled="@(busy || savingEdit)">
+                <button class="btn btn-outline-secondary btn-ky" type="button" @onclick="CancelEdit" disabled="@(busy || savingEdit)">
                     取消
                 </button>
             </div>
@@ -258,7 +269,7 @@
                 </div>
 
                 <div class="mt-3 d-flex gap-2">
-                    <button class="btn btn-primary" type="button" disabled="@(busy || savingEdit)" @onclick="SaveEditUser">
+                    <button class="btn btn-primary btn-ky" type="button" disabled="@(busy || savingEdit)" @onclick="SaveEditUser">
                         @(savingEdit ? "保存中..." : "保存修改")
                     </button>
                 </div>
@@ -292,6 +303,7 @@
     private string newAdminUserName = "";
     private string newAdminEmail = "";
     private string newAdminPassword = "";
+    private string adminTab = "create";
     private bool busy;
 
     private string newUserName = "";

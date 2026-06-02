@@ -5,64 +5,66 @@
 <div class="top-row ps-3 pe-2 navbar navbar-dark">
     <div class="container-fluid d-flex align-items-center justify-content-between flex-nowrap gap-2">
         <a class="navbar-brand mb-0" href="">KyInfo</a>
-        <span class="nav-brand-caption">菜单</span>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
+<div class="nav-scrollable">
+    <nav class="flex-column" aria-label="站点导航">
         @if (isLoggedIn)
         {
             @if (isAdmin)
             {
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="/admin" Match="NavLinkMatch.Prefix">
+                    <NavLink class="nav-link" href="/admin" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                         <span class="bi bi-shield-lock" aria-hidden="true"></span> 管理后台
                     </NavLink>
                 </div>
             }
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="/account" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="/account" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-person-circle" aria-hidden="true"></span> 我的档案
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="schools" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="schools" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-building" aria-hidden="true"></span> 院校查询
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="majors" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="majors" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-journal-text" aria-hidden="true"></span> 专业查询
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="scorelines" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="scorelines" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-graph-up" aria-hidden="true"></span> 分数线
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="scoreline-trends" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="scoreline-trends" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-bar-chart-line" aria-hidden="true"></span> 分数线趋势
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="recommendations" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="recommendations" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-stars" aria-hidden="true"></span> 智能志愿推荐
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="ai-chat" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="ai-chat" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-chat-dots" aria-hidden="true"></span> AI 助手
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="recruitinfos" Match="NavLinkMatch.Prefix">
+                <NavLink class="nav-link" href="recruitinfos" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
                     <span class="bi bi-file-text" aria-hidden="true"></span> 招生简章
                 </NavLink>
             </div>
+            <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="discussions" Match="NavLinkMatch.Prefix" @onclick="NotifyNavigate">
+                        <span class="bi bi-chat-square-text" aria-hidden="true"></span> 讨论区
+                    </NavLink>
+                </div>
             <div class="nav-item px-3 mt-3">
                 <button class="nav-link btn btn-link text-start w-100" type="button" @onclick="Logout">
                     <span class="bi bi-box-arrow-right" aria-hidden="true"></span> 退出登录
@@ -72,12 +74,12 @@
         else
         {
             <div class="nav-item px-3 mt-3">
-                <NavLink class="nav-link" href="login" Match="NavLinkMatch.All">
+                <NavLink class="nav-link" href="login" Match="NavLinkMatch.All" @onclick="NotifyNavigate">
                     <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> 登录
                 </NavLink>
             </div>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="register" Match="NavLinkMatch.All">
+                <NavLink class="nav-link" href="register" Match="NavLinkMatch.All" @onclick="NotifyNavigate">
                     <span class="bi bi-person-plus" aria-hidden="true"></span> 注册
                 </NavLink>
             </div>
@@ -86,6 +88,13 @@
 </div>
 
 @code {
+    [Parameter]
+    public EventCallback OnNavigate { get; set; }
+
+    private async Task NotifyNavigate()
+    {
+        await OnNavigate.InvokeAsync();
+    }
     [Inject]
     private IJSRuntime JS { get; set; } = default!;
 
@@ -145,7 +154,7 @@
                 lastProfileFetchUtc = DateTimeOffset.UtcNow;
                 try
                 {
-                    var me = await AccountApi.GetMeAsync();
+                    var me = await AccountApi.GetMeAsync(token);
                     TokenStore.SetProfile(me.Id, me.UserName, me.Role);
                     role = me.Role;
                     lastTokenChecked = token;

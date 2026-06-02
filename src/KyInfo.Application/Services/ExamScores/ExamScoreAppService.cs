@@ -66,11 +66,22 @@ public class ExamScoreAppService : IExamScoreAppService
         };
     }
 
-    public async Task<int> CreateAsync(ExamScoreCreateDto dto, CancellationToken cancellationToken)
+    public async Task<int> CreateAsync(
+        ExamScoreCreateDto dto,
+        int actorUserId,
+        string actorRole,
+        CancellationToken cancellationToken)
     {
         if (dto is null)
         {
             throw new ArgumentNullException(nameof(dto));
+        }
+
+        var isStaff = string.Equals(actorRole, "Admin", StringComparison.OrdinalIgnoreCase)
+                      || string.Equals(actorRole, "Root", StringComparison.OrdinalIgnoreCase);
+        if (!isStaff && dto.UserId != actorUserId)
+        {
+            throw new ForbiddenException("只能为自己录入成绩");
         }
 
         if (dto.Year <= 0)

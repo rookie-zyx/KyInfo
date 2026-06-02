@@ -9,3 +9,13 @@
 **/appsettings.Local.json
 **/appsettings.*.local.json
 
+# Local / CI artifacts
+temp-verify/
+debug-*.log
+*.log
+
+# IDE / tooling
+.cursor/
+.trae/
+.vscode/
+.github/copilot-instructions.md

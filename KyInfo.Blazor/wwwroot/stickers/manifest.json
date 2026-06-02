@@ -1,0 +1,342 @@
+[
+  {
+    "code": "neutral",
+    "label": "面无表情",
+    "file": "neutral.png"
+  },
+  {
+    "code": "grin_big",
+    "label": "大笑",
+    "file": "grin_big.png"
+  },
+  {
+    "code": "grin",
+    "label": "露齿笑",
+    "file": "grin.png"
+  },
+  {
+    "code": "grin_squint",
+    "label": "眯眼笑",
+    "file": "grin_squint.png"
+  },
+  {
+    "code": "beam",
+    "label": "笑眯眯",
+    "file": "beam.png"
+  },
+  {
+    "code": "grin_open",
+    "label": "张嘴笑",
+    "file": "grin_open.png"
+  },
+  {
+    "code": "smile",
+    "label": "微笑",
+    "file": "smile.png"
+  },
+  {
+    "code": "upside_down",
+    "label": "倒脸",
+    "file": "upside_down.png"
+  },
+  {
+    "code": "frown_slight",
+    "label": "微皱眉",
+    "file": "frown_slight.png"
+  },
+  {
+    "code": "frown",
+    "label": "皱眉",
+    "file": "frown.png"
+  },
+  {
+    "code": "pout_angry",
+    "label": "生气",
+    "file": "pout_angry.png"
+  },
+  {
+    "code": "neutral_line",
+    "label": "平脸",
+    "file": "neutral_line.png"
+  },
+  {
+    "code": "expressionless",
+    "label": "无表情",
+    "file": "expressionless.png"
+  },
+  {
+    "code": "open_mouth",
+    "label": "张嘴",
+    "file": "open_mouth.png"
+  },
+  {
+    "code": "hushed",
+    "label": "嘘",
+    "file": "hushed.png"
+  },
+  {
+    "code": "astonished",
+    "label": "惊讶",
+    "file": "astonished.png"
+  },
+  {
+    "code": "flushed",
+    "label": "脸红",
+    "file": "flushed.png"
+  },
+  {
+    "code": "frown_open",
+    "label": "皱眉张嘴",
+    "file": "frown_open.png"
+  },
+  {
+    "code": "anguished",
+    "label": "痛苦",
+    "file": "anguished.png"
+  },
+  {
+    "code": "angry",
+    "label": "愤怒",
+    "file": "angry.png"
+  },
+  {
+    "code": "angry_red",
+    "label": "红脸怒",
+    "file": "angry_red.png"
+  },
+  {
+    "code": "relieved",
+    "label": "放松",
+    "file": "relieved.png"
+  },
+  {
+    "code": "unamused",
+    "label": "无语",
+    "file": "unamused.png"
+  },
+  {
+    "code": "smirk",
+    "label": "坏笑",
+    "file": "smirk.png"
+  },
+  {
+    "code": "wink",
+    "label": "眨眼",
+    "file": "wink.png"
+  },
+  {
+    "code": "kiss",
+    "label": "飞吻",
+    "file": "kiss.png"
+  },
+  {
+    "code": "heart_eyes",
+    "label": "爱心眼",
+    "file": "heart_eyes.png"
+  },
+  {
+    "code": "kissing",
+    "label": "亲亲",
+    "file": "kissing.png"
+  },
+  {
+    "code": "kiss_closed",
+    "label": "闭眼亲",
+    "file": "kiss_closed.png"
+  },
+  {
+    "code": "kiss_smile",
+    "label": "微笑亲",
+    "file": "kiss_smile.png"
+  },
+  {
+    "code": "pensive",
+    "label": "沉思",
+    "file": "pensive.png"
+  },
+  {
+    "code": "persevere",
+    "label": "坚持",
+    "file": "persevere.png"
+  },
+  {
+    "code": "blush",
+    "label": "害羞",
+    "file": "blush.png"
+  },
+  {
+    "code": "smile_eyes",
+    "label": "微笑眼",
+    "file": "smile_eyes.png"
+  },
+  {
+    "code": "hug",
+    "label": "拥抱",
+    "file": "hug.png"
+  },
+  {
+    "code": "dizzy",
+    "label": "晕",
+    "file": "dizzy.png"
+  },
+  {
+    "code": "surprised",
+    "label": "吃惊",
+    "file": "surprised.png"
+  },
+  {
+    "code": "weary",
+    "label": "疲惫",
+    "file": "weary.png"
+  },
+  {
+    "code": "squint_tongue",
+    "label": "眯眼吐舌",
+    "file": "squint_tongue.png"
+  },
+  {
+    "code": "tongue",
+    "label": "吐舌",
+    "file": "tongue.png"
+  },
+  {
+    "code": "wink_tongue",
+    "label": "眨眼吐舌",
+    "file": "wink_tongue.png"
+  },
+  {
+    "code": "yum",
+    "label": "美味",
+    "file": "yum.png"
+  },
+  {
+    "code": "roll_eyes",
+    "label": "翻白眼",
+    "file": "roll_eyes.png"
+  },
+  {
+    "code": "wide_eyes",
+    "label": "瞪眼",
+    "file": "wide_eyes.png"
+  },
+  {
+    "code": "grimace",
+    "label": "龇牙",
+    "file": "grimace.png"
+  },
+  {
+    "code": "innocent",
+    "label": "天使",
+    "file": "innocent.png"
+  },
+  {
+    "code": "teeth",
+    "label": "露齿",
+    "file": "teeth.png"
+  },
+  {
+    "code": "sweat_smile",
+    "label": "汗笑",
+    "file": "sweat_smile.png"
+  },
+  {
+    "code": "sad_sweat",
+    "label": "汗丧",
+    "file": "sad_sweat.png"
+  },
+  {
+    "code": "cry",
+    "label": "流泪",
+    "file": "cry.png"
+  },
+  {
+    "code": "disappointed",
+    "label": "失望",
+    "file": "disappointed.png"
+  },
+  {
+    "code": "cold_sweat",
+    "label": "冷汗",
+    "file": "cold_sweat.png"
+  },
+  {
+    "code": "worried",
+    "label": "担心",
+    "file": "worried.png"
+  },
+  {
+    "code": "fearful",
+    "label": "害怕",
+    "file": "fearful.png"
+  },
+  {
+    "code": "joy_tears",
+    "label": "笑哭",
+    "file": "joy_tears.png"
+  },
+  {
+    "code": "sleepy",
+    "label": "困",
+    "file": "sleepy.png"
+  },
+  {
+    "code": "cool",
+    "label": "酷",
+    "file": "cool.png"
+  },
+  {
+    "code": "mask",
+    "label": "口罩",
+    "file": "mask.png"
+  },
+  {
+    "code": "sleeping",
+    "label": "睡觉",
+    "file": "sleeping.png"
+  },
+  {
+    "code": "sob",
+    "label": "大哭",
+    "file": "sob.png"
+  },
+  {
+    "code": "bandage",
+    "label": "受伤",
+    "file": "bandage.png"
+  },
+  {
+    "code": "money",
+    "label": "财迷",
+    "file": "money.png"
+  },
+  {
+    "code": "think",
+    "label": "思考",
+    "file": "think.png"
+  },
+  {
+    "code": "thermometer",
+    "label": "发烧",
+    "file": "thermometer.png"
+  },
+  {
+    "code": "zipper",
+    "label": "闭嘴",
+    "file": "zipper.png"
+  },
+  {
+    "code": "nerd",
+    "label": "书呆子",
+    "file": "nerd.png"
+  },
+  {
+    "code": "triumph",
+    "label": "得意",
+    "file": "triumph.png"
+  },
+  {
+    "code": "poop",
+    "label": "便便",
+    "file": "poop.png"
+  }
+]

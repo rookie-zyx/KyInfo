@@ -1,0 +1,534 @@
+@page "/discussions"
+@using KyInfo.Blazor.ApiClient
+@using KyInfo.Blazor.Components.Discussions
+@using KyInfo.Contracts.Discussions
+@inject DiscussionsApiClient DiscussionsApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject KyInfo.Blazor.Auth.TokenStore TokenStore
+
+<PageTitle>讨论区</PageTitle>
+
+<RequireLogin>
+<section class="discussions-page">
+    <header class="discussions-hero">
+        <div class="discussions-hero-text">
+            <h1>考研交流榜</h1>
+            <p class="discussions-subtitle">按时间、评论和活跃度浏览帖子，与研友交流备考经验</p>
+        </div>
+        <button type="button"
+                class="ky-btn ky-btn-primary discussion-publish-btn discussion-publish-btn-desktop"
+                @onclick="OpenComposerAsync">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+            <span>发布新讨论</span>
+        </button>
+    </header>
+
+    <div class="discussion-filter-bar">
+        <div class="discussion-search-row">
+            <div class="discussion-search-field">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <input id="discussion-keyword"
+                       class="discussion-search-input"
+                       placeholder="搜索标题或正文"
+                       aria-label="搜索标题或正文"
+                       @bind="keyword"
+                       @bind:event="oninput"
+                       @onkeydown="HandleSearchKey" />
+            </div>
+            <button type="button"
+                    class="ky-btn ky-btn-outline discussion-search-btn"
+                    aria-label="搜索帖子"
+                    title="搜索"
+                    @onclick="SearchAsync"
+                    disabled="@loading">
+                <i class="bi bi-search discussion-search-btn-icon" aria-hidden="true"></i>
+                <span class="discussion-search-btn-label">搜索</span>
+            </button>
+            <button type="button"
+                    class="ky-btn ky-btn-ghost-icon discussion-refresh-btn @(loading ? "is-spinning" : null)"
+                    aria-label="刷新列表"
+                    title="刷新"
+                    @onclick="RefreshList"
+                    disabled="@loading">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <div class="discussion-filter-tabs" role="tablist" aria-label="分区、排序与范围">
+            <div class="discussion-filter-tab-group" role="presentation">
+                @foreach (var tab in ZoneTabs)
+                {
+                    <button type="button"
+                            role="tab"
+                            class="discussion-filter-tab @(tab.Value == currentZone ? "is-active" : null)"
+                            aria-selected="@(tab.Value == currentZone)"
+                            @onclick="() => ChangeZoneAsync(tab.Value)">
+                        <span>@tab.Label</span>
+                    </button>
+                }
+            </div>
+
+            <span class="discussion-filter-divider" aria-hidden="true"></span>
+
+            <div class="discussion-filter-tab-group" role="presentation">
+                @foreach (var tab in SortTabs)
+                {
+                    <button type="button"
+                            role="tab"
+                            class="discussion-filter-tab @(tab.Value == currentSort ? "is-active" : null)"
+                            aria-selected="@(tab.Value == currentSort)"
+                            @onclick="() => ChangeSortAsync(tab.Value)">
+                        <i class="bi @tab.Icon" aria-hidden="true"></i>
+                        <span>@tab.Label</span>
+                    </button>
+                }
+            </div>
+
+            <span class="discussion-filter-divider" aria-hidden="true"></span>
+
+            <div class="discussion-filter-tab-group" role="presentation">
+                @foreach (var tab in ScopeTabs)
+                {
+                    <button type="button"
+                            role="tab"
+                            class="discussion-filter-tab @(tab.Value == currentScope ? "is-active" : null)"
+                            aria-selected="@(tab.Value == currentScope)"
+                            @onclick="() => ChangeScopeAsync(tab.Value)">
+                        <span>@tab.Label</span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="alert alert-success discussion-alert" role="status">@statusMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger discussion-alert" role="alert">@errorMessage</div>
+    }
+
+    @if (loading)
+    {
+        <div class="discussion-state-block">讨论列表加载中…</div>
+    }
+    else if (listResponse is null)
+    {
+        <div class="discussion-state-block">@(string.IsNullOrWhiteSpace(errorMessage) ? "暂时没有拿到讨论列表。" : errorMessage)</div>
+    }
+    else if (VisibleItems.Count == 0)
+    {
+        <div class="discussion-empty-state">
+            <div class="discussion-empty-icon">
+                <i class="bi bi-chat-heart" aria-hidden="true"></i>
+            </div>
+            @if (currentScope == DiscussionScope.Mine)
+            {
+                <h3>你还没有发过帖子</h3>
+                <p>发布复习记录、择校问题或资料求助，与研友一起交流。</p>
+            }
+            else
+            {
+                <h3>这里还很安静</h3>
+                <p>成为第一个发帖的人，带动后续讨论与回复。</p>
+            }
+            <button type="button" class="ky-btn ky-btn-primary discussion-publish-btn" @onclick="OpenComposerAsync">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                <span>发布新讨论</span>
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="discussion-feed-list">
+            @for (var i = 0; i < VisibleItems.Count; i++)
+            {
+                var item = VisibleItems[i];
+                var isPinned = currentPage == 1 && i == 0;
+                <button type="button"
+                        class="discussion-post-card"
+                        @onclick="() => GoDetail(item.Id)">
+                    <div class="discussion-post-avatar" aria-hidden="true">@GetAuthorGlyph(item.AuthorUserName)</div>
+                    <div class="discussion-post-body">
+                        <div class="discussion-post-title-row">
+                            @if (isPinned)
+                            {
+                                <span class="pill-pin">
+                                    <i class="bi bi-pin-angle-fill" aria-hidden="true"></i>
+                                    置顶
+                                </span>
+                            }
+                            <h3 class="discussion-post-title">@item.Title</h3>
+                        </div>
+                        <p class="discussion-post-preview">@GetPreviewText(item)</p>
+                        <div class="discussion-post-meta">
+                            <span class="discussion-post-meta-item">
+                                <i class="bi bi-person" aria-hidden="true"></i>
+                                @item.AuthorUserName
+                            </span>
+                            <span class="discussion-post-meta-item">
+                                @FormatDateTime(item.CreatedAt)
+                            </span>
+                            <span class="discussion-post-meta-item">
+                                <i class="bi bi-chat-left-text" aria-hidden="true"></i>
+                                @item.CommentCount 评论
+                            </span>
+                        </div>
+                    </div>
+                    <i class="bi bi-chevron-right discussion-post-arrow" aria-hidden="true"></i>
+                </button>
+            }
+        </div>
+
+        @if (listResponse.TotalCount > listResponse.PageSize)
+        {
+            <div class="discussion-pagination">
+                <button type="button" class="discussion-page-btn" @onclick="PrevPage" disabled="@(currentPage <= 1 || loading)">
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    <span>上一页</span>
+                </button>
+                <span class="discussion-page-info">第 @currentPage / @TotalPages 页</span>
+                <button type="button" class="discussion-page-btn" @onclick="NextPage" disabled="@(currentPage >= TotalPages || loading)">
+                    <span>下一页</span>
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </button>
+            </div>
+        }
+    }
+
+    <button type="button"
+            class="discussion-fab discussion-fab-mobile"
+            aria-label="发布新讨论"
+            title="发布新讨论"
+            @onclick="OpenComposerAsync">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+    </button>
+
+    @if (composerOpen)
+    {
+        <div class="discussion-composer-backdrop" @onclick="CloseComposer"></div>
+        <div class="discussion-composer-dialog" role="dialog" aria-modal="true" aria-labelledby="composer-title">
+            <div class="discussion-composer-dialog-head">
+                <h2 id="composer-title">发布新讨论</h2>
+                <button type="button" class="discussion-composer-close" aria-label="关闭" @onclick="CloseComposer">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="discussion-composer-fields">
+                <div class="discussion-composer-field">
+                    <label class="discussion-composer-label" for="discussion-new-title">标题</label>
+                    <input id="discussion-new-title"
+                           class="form-control discussion-composer-input"
+                           @bind="newTitle"
+                           maxlength="200"
+                           placeholder="例如：408 复习路线怎么排"
+                           disabled="@busy" />
+                </div>
+
+                <div class="discussion-composer-field">
+                    <label class="discussion-composer-label" for="discussion-new-content">正文</label>
+                    <div class="discussion-composer-textarea-wrap">
+                        <textarea id="discussion-new-content"
+                                  class="form-control discussion-composer-textarea"
+                                  @bind="newContent"
+                                  maxlength="4000"
+                                  placeholder="写下你的问题、经验或者资料线索…"
+                                  disabled="@busy"></textarea>
+                        <div class="discussion-composer-textarea-bar">
+                            <span class="discussion-composer-count" aria-live="polite">@newContent.Length / 4000</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="discussion-composer-footer">
+                <button type="button" class="ky-btn ky-btn-outline" @onclick="CloseComposer" disabled="@busy">取消</button>
+                <button type="button" class="ky-btn discussion-composer-submit" @onclick="CreateDiscussion" disabled="@busy">
+                    <i class="bi bi-send" aria-hidden="true"></i>
+                    <span>@(busy ? "发布中…" : "发布讨论")</span>
+                </button>
+            </div>
+        </div>
+    }
+</section>
+</RequireLogin>
+
+@code {
+    private static readonly (string Value, string Label, string Icon)[] SortTabs =
+    {
+        (DiscussionSortOptions.Latest, "最新", "bi-clock"),
+        (DiscussionSortOptions.MostCommented, "评论最多", "bi-chat-dots"),
+        (DiscussionSortOptions.RecentlyActive, "最近活跃", "bi-activity")
+    };
+
+    private static readonly (string Value, string Label)[] ScopeTabs =
+    {
+        (DiscussionScope.All, "全部帖子"),
+        (DiscussionScope.Mine, "我的帖子")
+    };
+
+    private static readonly (string Value, string Label)[] ZoneTabs =
+    {
+        (DiscussionZoneOptions.Student, "学生讨论区"),
+        (DiscussionZoneOptions.Teacher, "教师讨论区")
+    };
+
+    private DiscussionListResponseDto? listResponse;
+    private string? keyword;
+    private string newTitle = string.Empty;
+    private string newContent = string.Empty;
+    private int currentPage = 1;
+    private const int PageSize = 15;
+    private bool loading = true;
+    private bool busy;
+    private bool composerOpen;
+    private string? statusMessage;
+    private string? errorMessage;
+    private string? currentAccessToken;
+    private string currentSort = DiscussionSortOptions.Latest;
+    private string currentScope = DiscussionScope.All;
+    private string currentZone = DiscussionZoneOptions.Student;
+
+    private IReadOnlyList<DiscussionListItemDto> VisibleItems => listResponse?.Items ?? Array.Empty<DiscussionListItemDto>();
+
+    private int TotalPages => listResponse is null || listResponse.PageSize <= 0
+        ? 1
+        : Math.Max(1, (int)Math.Ceiling(listResponse.TotalCount / (double)listResponse.PageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        ParseZoneFromUrl();
+        await LoadList();
+    }
+
+    private void ParseZoneFromUrl()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var queryString = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (queryString.TryGetValue("zone", out var zoneParam) && !string.IsNullOrWhiteSpace(zoneParam))
+        {
+            if (string.Equals(zoneParam, DiscussionZoneOptions.Teacher, StringComparison.OrdinalIgnoreCase))
+            {
+                currentZone = DiscussionZoneOptions.Teacher;
+            }
+            else if (string.Equals(zoneParam, DiscussionZoneOptions.Student, StringComparison.OrdinalIgnoreCase))
+            {
+                currentZone = DiscussionZoneOptions.Student;
+            }
+        }
+    }
+
+    private async Task LoadList()
+    {
+        loading = true;
+        errorMessage = null;
+        try
+        {
+            var token = await RequireAccessTokenAsync();
+            var zone = currentZone == DiscussionZoneOptions.All ? null : currentZone;
+            listResponse = await DiscussionsApi.SearchAsync(
+                currentPage,
+                PageSize,
+                keyword,
+                currentSort,
+                currentScope == DiscussionScope.Mine ? TokenStore.UserId : null,
+                zone,
+                token);
+            if (listResponse.Items is null)
+            {
+                listResponse.Items = Array.Empty<DiscussionListItemDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            listResponse = null;
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task CreateDiscussion()
+    {
+        busy = true;
+        statusMessage = null;
+        errorMessage = null;
+        try
+        {
+            var token = await RequireAccessTokenAsync();
+            var id = await DiscussionsApi.CreateDiscussionAsync(new DiscussionCreateDto
+            {
+                Title = newTitle,
+                Content = newContent,
+                IsTeacherZone = currentZone == DiscussionZoneOptions.Teacher
+            }, token);
+
+            statusMessage = "发布成功";
+            newTitle = string.Empty;
+            newContent = string.Empty;
+            composerOpen = false;
+            currentPage = 1;
+            await LoadList();
+            Navigation.NavigateTo($"/discussions/{id}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private Task InsertNewContentSticker(string code) => Task.CompletedTask;
+
+    private void GoDetail(int id) => Navigation.NavigateTo($"/discussions/{id}");
+
+    private async Task PrevPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await LoadList();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (currentPage < TotalPages)
+        {
+            currentPage++;
+            await LoadList();
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        currentPage = 1;
+        await LoadList();
+    }
+
+    private async Task HandleSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+
+    private async Task RefreshList() => await LoadList();
+
+    private async Task OpenComposerAsync()
+    {
+        composerOpen = true;
+        await Task.Yield();
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "document.getElementById('discussion-new-title')?.focus()");
+        }
+        catch
+        {
+            // ignore focus errors
+        }
+    }
+
+    private void CloseComposer() => composerOpen = false;
+
+    private async Task ChangeSortAsync(string sort)
+    {
+        if (string.Equals(currentSort, sort, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        currentSort = sort;
+        currentPage = 1;
+        await LoadList();
+    }
+
+    private async Task ChangeScopeAsync(string scope)
+    {
+        if (string.Equals(currentScope, scope, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        currentScope = scope;
+        currentPage = 1;
+        await LoadList();
+    }
+
+    private async Task ChangeZoneAsync(string zone)
+    {
+        if (string.Equals(currentZone, zone, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        currentZone = zone;
+        currentPage = 1;
+        await LoadList();
+    }
+
+    private static string FormatDateTime(DateTime createdAt) =>
+        createdAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    private static string GetAuthorGlyph(string userName)
+    {
+        var ch = userName.Trim().FirstOrDefault(c => !char.IsWhiteSpace(c));
+        return ch == default ? "研" : ch.ToString().ToUpperInvariant();
+    }
+
+    private static string GetPreviewText(DiscussionListItemDto item)
+    {
+        var text = DiscussionContentParser.ToPlainText(item.ContentPreview).Trim();
+        return string.IsNullOrWhiteSpace(text) ? "点击查看完整正文。" : text;
+    }
+
+    private async Task<string?> GetAccessTokenAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(currentAccessToken))
+        {
+            return currentAccessToken;
+        }
+
+        var auth = await JS.InvokeAsync<KyInfo.Blazor.Auth.BrowserAuthResult>("kyinfoAuth.getSession");
+        if (auth.Session?.IsAuthenticated != true || string.IsNullOrWhiteSpace(auth.Session.Token))
+        {
+            currentAccessToken = null;
+            return null;
+        }
+
+        currentAccessToken = auth.Session.Token;
+        TokenStore.SetAuthenticated(
+            auth.Session.Token,
+            auth.Session.UserName,
+            auth.Session.Role,
+            auth.Session.UserId);
+        return currentAccessToken;
+    }
+
+    private async Task<string> RequireAccessTokenAsync()
+    {
+        var token = await GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new ApiException(System.Net.HttpStatusCode.Unauthorized, "登录状态已失效，请重新登录后再试。");
+        }
+
+        return token;
+    }
+
+    private static class DiscussionScope
+    {
+        public const string All = "all";
+        public const string Mine = "mine";
+    }
+}

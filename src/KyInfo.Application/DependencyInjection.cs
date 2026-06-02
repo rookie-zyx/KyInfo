@@ -7,6 +7,7 @@ using KyInfo.Application.Services.Recommendations;
 using KyInfo.Application.Services.RecruitInfos;
 using KyInfo.Application.Services.Schools;
 using KyInfo.Application.Services.ScoreLines;
+using KyInfo.Application.Services.Discussions;
 using KyInfo.Application.Services.Ratings;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<IMajorAppService, MajorAppService>();
         services.AddScoped<IAccountAppService, AccountAppService>();
         services.AddScoped<IAdminAppService, AdminAppService>();
+        services.AddScoped<IDiscussionAppService, DiscussionAppService>();
         services.AddScoped<IRatingAppService, RatingAppService>();
 
         return services;

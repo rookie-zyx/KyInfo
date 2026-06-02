@@ -7,8 +7,8 @@
     --ky-muted: #64748b;
     --ky-bg: #eef1f8;
     --ky-surface: rgba(255, 255, 255, 0.92);
-    --ky-primary: #1d4ed8;
-    --ky-primary-dark: #1e40af;
+    --ky-primary: #3b82f6;
+    --ky-primary-dark: #2563eb;
     --ky-primary-soft: rgba(29, 78, 216, 0.08);
     --ky-border: rgba(15, 23, 42, 0.08);
     --ky-border-strong: rgba(15, 23, 42, 0.12);
@@ -66,6 +66,73 @@ a:hover {
 }
 
 /* ========== 应用壳与主区 ========== */
+/* 全局布局（不依赖 KyInfo.Blazor.styles.css，避免生产环境侧栏/顶栏分离） */
+.page.app-shell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.page.app-shell > .sidebar {
+    background: linear-gradient(168deg, #0b1220 0%, #1e293b 52%, #172554 100%);
+    border-right: 1px solid rgba(148, 163, 184, 0.12);
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.12);
+}
+
+.page.app-shell .top-row {
+    background: rgba(8, 12, 22, 0.45);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.page.app-shell .navbar-brand {
+    font-family: var(--ky-font-display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #f8fafc !important;
+}
+
+.page.app-shell .nav-scrollable {
+    display: block;
+    height: calc(100vh - 3.5rem);
+    overflow-y: auto;
+}
+
+.page.app-shell .nav-item .nav-link {
+    color: rgba(248, 250, 252, 0.78);
+    border-radius: 0.55rem;
+    min-height: 2.65rem;
+    display: flex;
+    align-items: center;
+    padding: 0.45rem 0.65rem;
+    margin: 0.12rem 0;
+}
+
+.page.app-shell .nav-item .nav-link:hover,
+.page.app-shell .nav-item .nav-link.active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+@media (min-width: 641px) {
+    .page.app-shell {
+        flex-direction: row;
+        align-items: stretch;
+    }
+
+    .page.app-shell > .sidebar {
+        width: 268px;
+        min-width: 268px;
+        min-height: 100vh;
+        position: sticky;
+        top: 0;
+        align-self: flex-start;
+    }
+}
+
 .app-shell {
     min-height: 100vh;
     background:
@@ -102,18 +169,7 @@ a:hover {
 }
 
 .app-header-kicker {
-    flex-shrink: 0;
-    margin-top: 0.15rem;
-    padding: 0.35rem 0.6rem;
-    border-radius: 0.5rem;
-    font-family: var(--ky-font-display);
-    font-size: 0.85rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: #1e40af;
-    background: linear-gradient(135deg, rgba(219, 234, 254, 0.95), rgba(191, 219, 254, 0.5));
-    border: 1px solid rgba(59, 130, 246, 0.22);
-    box-shadow: var(--ky-shadow-sm);
+    display: none;
 }
 
 .app-title {

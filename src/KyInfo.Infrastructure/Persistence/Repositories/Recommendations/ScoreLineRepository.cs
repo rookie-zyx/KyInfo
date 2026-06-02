@@ -98,6 +98,8 @@ public class ScoreLineRepository : IScoreLineRepository
         int? schoolId,
         int? majorId,
         bool? isNational,
+        string? schoolName,
+        string? majorName,
         CancellationToken cancellationToken)
     {
         var query = _db.ScoreLines.AsNoTracking().AsQueryable();
@@ -115,6 +117,16 @@ public class ScoreLineRepository : IScoreLineRepository
         if (majorId.HasValue)
         {
             query = query.Where(x => x.MajorId == majorId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(schoolName))
+        {
+            query = query.Where(x => x.School != null && x.School.Name.Contains(schoolName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(majorName))
+        {
+            query = query.Where(x => x.Major != null && x.Major.Name.Contains(majorName));
         }
 
         // 先拉取最小列再在内存聚合，避免不同 SQL 方言/版本对 AVG+ROUND 的翻译差异导致 500。

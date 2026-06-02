@@ -1,0 +1,80 @@
+# KyInfo Docker Compose（PostgreSQL + API + Blazor）
+# 使用: docker compose up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kyinfo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: KyInfo@2026
+      POSTGRES_DB: KyInfoDb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - kyinfo-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d KyInfoDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: KyInfo.Api/Dockerfile
+    container_name: kyinfo-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=KyInfoDb;Username=postgres;Password=KyInfo@2026
+      Jwt__Key: change-me-to-a-secret-key-at-least-32-characters-long
+      Jwt__Issuer: KyInfo
+      Jwt__Audience: KyInfo
+      Jwt__ExpireMinutes: "1440"
+      Cors__Origins__0: http://localhost:5001
+      Cors__Origins__1: http://127.0.0.1:5001
+    ports:
+      - "5000:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - kyinfo-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  blazor:
+    build:
+      context: .
+      dockerfile: KyInfo.Blazor/Dockerfile
+    container_name: kyinfo-blazor
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ApiBaseUrl: http://api:80
+    ports:
+      - "5001:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - kyinfo-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  kyinfo-network:
+    driver: bridge

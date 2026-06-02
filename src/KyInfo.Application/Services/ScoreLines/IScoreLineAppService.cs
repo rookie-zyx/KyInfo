@@ -15,6 +15,8 @@ public interface IScoreLineAppService
         int? schoolId,
         int? majorId,
         bool? isNational,
+        string? schoolName,
+        string? majorName,
         CancellationToken cancellationToken);
 
     Task<ScoreLineDetailDto> GetByIdAsync(int id, CancellationToken cancellationToken);

@@ -1,0 +1,15 @@
+﻿.git
+.vs
+.vscode
+.cursor
+.trae
+node_modules
+bin
+obj
+tests
+scripts
+docs
+*.log
+*.docx
+temp-verify
+.config

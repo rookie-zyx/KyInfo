@@ -1,79 +1,65 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace KyInfo.Blazor.ApiClient;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddKyInfoApiClients(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddKyInfoApiClients(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
-        services.AddHttpClient("KyInfoApi", client =>
+        void ConfigureClient(HttpClient client)
         {
             client.BaseAddress = new Uri(configuration["ApiBaseUrl"] ?? "https://localhost:7233");
             client.Timeout = TimeSpan.FromSeconds(60);
-        });
+        }
+
+        var kyInfoApiBuilder = services.AddHttpClient("KyInfoApi", ConfigureClient);
+        if (environment.IsDevelopment())
+        {
+            // 本地开发证书可能未信任，允许调用 https://localhost:7233
+            kyInfoApiBuilder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            });
+        }
 
         services.AddScoped<TokenDelegatingHandler>();
 
-        services.AddHttpClient<AuthApiClient>((sp, http) =>
+        IHttpClientBuilder AddApiClient<TClient>() where TClient : class
         {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
+            var builder = services.AddHttpClient<TClient>((sp, http) =>
+            {
+                ConfigureClient(http);
+            }).AddHttpMessageHandler<TokenDelegatingHandler>();
 
-        services.AddHttpClient<SchoolsApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
+            if (environment.IsDevelopment())
+            {
+                builder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                });
+            }
 
-        services.AddHttpClient<AccountApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
+            return builder;
+        }
 
-        services.AddHttpClient<RecommendationsApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
-
-        services.AddHttpClient<ScoreLinesApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
-
-        services.AddHttpClient<ExamScoresApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
-
-        services.AddHttpClient<MajorsApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
-
-        services.AddHttpClient<RecruitInfosApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(60);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
-
-        services.AddHttpClient<AiChatApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(120);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
-
-        services.AddHttpClient<AdminApiClient>((sp, http) =>
-        {
-            http.BaseAddress = sp.GetRequiredService<IHttpClientFactory>().CreateClient("KyInfoApi").BaseAddress;
-            http.Timeout = TimeSpan.FromSeconds(120);
-        }).AddHttpMessageHandler<TokenDelegatingHandler>();
+        AddApiClient<AuthApiClient>();
+        AddApiClient<SchoolsApiClient>();
+        AddApiClient<AccountApiClient>();
+        AddApiClient<RecommendationsApiClient>();
+        AddApiClient<ScoreLinesApiClient>();
+        AddApiClient<ExamScoresApiClient>();
+        AddApiClient<MajorsApiClient>();
+        AddApiClient<RecruitInfosApiClient>();
+        AddApiClient<AiChatApiClient>().ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(120));
+        AddApiClient<AdminApiClient>().ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(120));
+        AddApiClient<DiscussionsApiClient>();
 
         return services;
     }

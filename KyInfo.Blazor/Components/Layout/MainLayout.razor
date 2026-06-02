@@ -1,17 +1,25 @@
 @inherits LayoutComponentBase
-@rendermode InteractiveServer
 @implements IDisposable
 @inject NavigationManager Navigation
 
-<div class="page app-shell">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<a class="skip-link" href="#main-content">跳到主内容</a>
 
-    <main class="app-main">
+<div class="page app-shell @(sidebarOpen ? "sidebar-open" : null)">
+    <div class="sidebar-drawer-backdrop" @onclick="CloseSidebar" aria-hidden="true"></div>
+    <aside class="sidebar" aria-label="主导航">
+        <NavMenu OnNavigate="CloseSidebar" />
+    </aside>
+
+    <main class="app-main" id="main-content">
         <header class="app-header">
             <div class="app-header-left">
-                <div class="app-header-kicker">KyInfo</div>
+                <button type="button"
+                        class="app-menu-toggle"
+                        aria-label="打开导航菜单"
+                        aria-expanded="@sidebarOpen"
+                        @onclick="ToggleSidebar">
+                    <span class="bi bi-list" aria-hidden="true"></span>
+                </button>
                 <div>
                     <div class="app-title">@AppTitle</div>
                     <div class="app-subtitle">@AppSubtitle</div>
@@ -58,6 +66,11 @@
 
     private string? userName;
     private string routeKey = string.Empty;
+    private bool sidebarOpen;
+
+    private void ToggleSidebar() => sidebarOpen = !sidebarOpen;
+
+    private void CloseSidebar() => sidebarOpen = false;
 
     private string DisplayUserName => string.IsNullOrWhiteSpace(userName) ? "未登录" : userName!;
 
@@ -144,6 +157,7 @@
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         routeKey = GetRouteKeyFromLocation(e.Location);
+        sidebarOpen = false;
         _ = InvokeAsync(StateHasChanged);
     }
 
@@ -192,6 +206,7 @@
         "recommendations" => "智能志愿推荐",
         "ai-chat" => "AI 助手",
         "recruitinfos" => "招生简章",
+        "discussions" => "讨论区",
         "login" => "登录",
         "register" => "注册",
         _ => "考研信息系统"
@@ -209,6 +224,7 @@
         "recommendations" => "智能志愿推荐",
         "ai-chat" => "对话式辅助",
         "recruitinfos" => "招生简章检索",
+        "discussions" => "发帖交流、评论互动与表情贴纸",
         "login" => "登录以使用完整功能",
         "register" => "注册新账户",
         _ => "院校、专业、分数线与志愿推荐，一站式查询与决策辅助"

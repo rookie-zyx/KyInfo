@@ -14,7 +14,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<TokenStore>();
 
-builder.Services.AddKyInfoApiClients(builder.Configuration);
+builder.Services.AddKyInfoApiClients(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 

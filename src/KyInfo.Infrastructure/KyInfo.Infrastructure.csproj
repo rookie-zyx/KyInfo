@@ -7,16 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.24" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.24" />
-    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.24" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.24" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\\KyInfo.Domain\\KyInfo.Domain.csproj" />
-    <ProjectReference Include="..\\KyInfo.Contracts\\KyInfo.Contracts.csproj" />
-    <ProjectReference Include="..\\KyInfo.Application\\KyInfo.Application.csproj" />
+    <ProjectReference Include="../KyInfo.Domain/KyInfo.Domain.csproj" />
+    <ProjectReference Include="../KyInfo.Contracts/KyInfo.Contracts.csproj" />
+    <ProjectReference Include="../KyInfo.Application/KyInfo.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,13 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!--
-      将原本位于 KyInfo.Api\Migrations 的 EF Core 迁移代码，
-      编译进 Infrastructure 层的 Persistence\Migrations 目录（通过 Link 呈现层次）。
-      这样下一步可以逐步将迁移也“物理定位”为 Infrastructure。
-    -->
-    <Compile Include="..\\..\\KyInfo.Api\\Migrations\\**\\*.cs"
-             Link="Persistence\\Migrations\\%(RecursiveDir)%(Filename)%(Extension)" />
+  <!-- EF migrations live under Migrations/ but display under Persistence/Migrations in the IDE -->
+    <Compile Remove="Migrations/**/*.cs" />
+    <Compile Include="Migrations/**/*.cs"
+             Exclude="Migrations/**/*.commit.cs"
+             Link="Persistence/Migrations/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

@@ -9,67 +9,38 @@
 <div class="section-header">
     <div class="section-header-title">
         <h1>分数线查询</h1>
-        <span class="pill-badge">查看国家线与各院校 / 专业历史分数线</span>
     </div>
-    <div class="text-muted small section-tagline">
-        支持按年份、院校、专业和类型筛选，可配合趋势图一起分析变化情况。
-    </div>
+    <p class="section-tagline mb-0">查看国家线与各院校 / 专业历史分数线，支持按年份、院校、专业和类型筛选。</p>
 </div>
 
 <div class="card card-soft mb-3">
     <div class="card-header card-soft-header">
         <strong>筛选条件</strong>
-        <span class="ms-2 text-muted small">
-            当前条件：
-            @if (string.IsNullOrWhiteSpace(schoolIdText) && string.IsNullOrWhiteSpace(majorIdText) && string.IsNullOrWhiteSpace(yearText) && string.IsNullOrWhiteSpace(isNationalText))
-            {
-                <span class="pill-badge pill-badge-muted">全部分数线</span>
-            }
-            else
-            {
-                @if (!string.IsNullOrWhiteSpace(yearText))
-                {
-                    <span class="pill-badge me-1">年份：@yearText</span>
-                }
-                @if (!string.IsNullOrWhiteSpace(schoolIdText))
-                {
-                    <span class="pill-badge me-1">院校 Id：@schoolIdText</span>
-                }
-                @if (!string.IsNullOrWhiteSpace(majorIdText))
-                {
-                    <span class="pill-badge me-1">专业 Id：@majorIdText</span>
-                }
-                @if (!string.IsNullOrWhiteSpace(isNationalText))
-                {
-                    <span class="pill-badge me-1">类型：@(isNationalText == "true" ? "国家线" : "院校/专业线")</span>
-                }
-            }
-        </span>
     </div>
     <div class="card-body">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small text-muted">院校 Id（可选）</label>
-                <input class="form-control" placeholder="限定某一院校" @bind="schoolIdText" />
+        <div class="ky-filter-form">
+            <div class="ky-filter-field">
+                <label class="form-label" for="sl-school">院校（可选）</label>
+                <input id="sl-school" class="form-control" placeholder="输入院校 Id，留空查全部" @bind="schoolIdText" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted">专业 Id（可选）</label>
-                <input class="form-control" placeholder="限定某一专业" @bind="majorIdText" />
+            <div class="ky-filter-field">
+                <label class="form-label" for="sl-major">专业（可选）</label>
+                <input id="sl-major" class="form-control" placeholder="输入专业 Id，留空查全部" @bind="majorIdText" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted">年份</label>
-                <input class="form-control" placeholder="如 2025" @bind="yearText" />
+            <div class="ky-filter-field">
+                <label class="form-label" for="sl-year">年份</label>
+                <input id="sl-year" class="form-control" placeholder="如 2025，留空表示不限" @bind="yearText" />
             </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted">类型</label>
-                <select class="form-control" @bind="isNationalText">
+            <div class="ky-filter-field">
+                <label class="form-label" for="sl-type">类型</label>
+                <select id="sl-type" class="form-select" @bind="isNationalText">
                     <option value="">全部</option>
                     <option value="true">国家线</option>
-                    <option value="false">非国家线</option>
+                    <option value="false">院校/专业线</option>
                 </select>
             </div>
-            <div class="col-md-1 d-grid">
-                <button class="btn btn-primary" @onclick="Load" disabled="@loading">
+            <div class="ky-filter-actions">
+                <button type="button" class="btn btn-primary btn-ky" @onclick="Load" disabled="@loading">
                     @(loading ? "查询中..." : "查询")
                 </button>
             </div>
@@ -79,17 +50,13 @@
 
 @if (!string.IsNullOrEmpty(error))
 {
-    <div class="alert alert-warning">@error</div>
+    <div class="alert alert-warning" role="alert">@error</div>
 }
 
 <div class="card card-soft">
-    <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
-        <div>
-            <strong>分数线列表</strong>
-            <span class="ms-2 text-muted small">
-                共 @(items?.Count ?? 0) 条记录
-            </span>
-        </div>
+    <div class="card-header card-soft-header">
+        <strong>分数线列表</strong>
+        <span class="ms-2 text-muted small">共 @(items?.Count ?? 0) 条记录</span>
     </div>
     <div class="card-body p-0">
         @if (loading)
@@ -98,37 +65,57 @@
         }
         else if (items is null || !items.Any())
         {
-            <div class="p-3 text-muted">暂无数据，请调整筛选条件后重试。</div>
+            <div class="ky-empty-state">
+                <span class="bi bi-table ky-empty-state-icon" aria-hidden="true"></span>
+                <p class="ky-empty-state-title">暂无分数线数据</p>
+                <p class="ky-empty-state-hint">调整上方筛选条件后点击「查询」。</p>
+            </div>
         }
         else
         {
-            <table class="table table-sm mb-0">
-                <thead>
-                    <tr>
-                        <th>年份</th>
-                        <th>分数</th>
-                        <th>类型</th>
-                        <th>院校</th>
-                        <th>专业</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var x in items)
-                    {
+            <div class="ky-mobile-cards">
+                @foreach (var x in items)
+                {
+                    <div class="ky-mobile-card">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <strong>@x.Year 年 · @x.Score 分</strong>
+                            <span class="pill-badge @(x.IsNational ? "pill-national" : "pill-school-line")">
+                                @(x.IsNational ? "国家线" : "院校/专业线")
+                            </span>
+                        </div>
+                        <div class="small text-muted">@(x.SchoolName ?? "—") · @(x.MajorName ?? "—")</div>
+                    </div>
+                }
+            </div>
+            <div class="table-responsive d-none d-sm-block">
+                <table class="table table-sm table-ky mb-0">
+                    <thead>
                         <tr>
-                            <td>@x.Year</td>
-                            <td>@x.Score</td>
-                            <td>
-                                <span class="pill-badge pill-badge-muted">
-                                    @(x.IsNational ? "国家线" : "院校/专业线")
-                                </span>
-                            </td>
-                            <td>@(x.SchoolName ?? "-")</td>
-                            <td>@(x.MajorName ?? "-")</td>
+                            <th>年份</th>
+                            <th>分数</th>
+                            <th>类型</th>
+                            <th>院校</th>
+                            <th>专业</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var x in items)
+                        {
+                            <tr>
+                                <td>@x.Year</td>
+                                <td>@x.Score</td>
+                                <td>
+                                    <span class="pill-badge @(x.IsNational ? "pill-national" : "pill-school-line")">
+                                        @(x.IsNational ? "国家线" : "院校/专业线")
+                                    </span>
+                                </td>
+                                <td>@(x.SchoolName ?? "—")</td>
+                                <td>@(x.MajorName ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </div>
 </div>
@@ -171,5 +158,4 @@
             loading = false;
         }
     }
-
 }

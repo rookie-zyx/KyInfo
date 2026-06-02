@@ -46,12 +46,16 @@ public class ScoreLineAppService : IScoreLineAppService
         int? schoolId,
         int? majorId,
         bool? isNational,
+        string? schoolName,
+        string? majorName,
         CancellationToken cancellationToken)
     {
         var points = await _scoreLineRepository.GetTrendAsync(
             schoolId,
             majorId,
             isNational,
+            schoolName,
+            majorName,
             cancellationToken);
 
         return points.Select(p => new ScoreLineTrendPointDto

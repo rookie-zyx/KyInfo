@@ -9,55 +9,30 @@
 <div class="section-header">
     <div class="section-header-title">
         <h1>院校查询</h1>
-        <span class="pill-badge">按名称 / 省份 / 层次快速筛选院校</span>
     </div>
-    <div class="text-muted small section-tagline">
-        支持模糊搜索与组合条件，点击列表查看院校详情与链接。
-    </div>
-    </div>
+    <p class="section-tagline mb-0">按名称、省份、层次快速筛选院校，点击列表查看详情与官网链接。</p>
+</div>
 
 <div class="card card-soft mb-3">
     <div class="card-header card-soft-header">
         <strong>筛选条件</strong>
-        <span class="ms-2 text-muted small">
-            当前条件：
-            @if (string.IsNullOrWhiteSpace(keyword) && string.IsNullOrWhiteSpace(province) && string.IsNullOrWhiteSpace(levelTag))
-            {
-                <span class="pill-badge pill-badge-muted">全部院校</span>
-            }
-            else
-            {
-                @if (!string.IsNullOrWhiteSpace(keyword))
-                {
-                    <span class="pill-badge me-1">关键词：@keyword</span>
-                }
-                @if (!string.IsNullOrWhiteSpace(province))
-                {
-                    <span class="pill-badge me-1">省份：@province</span>
-                }
-                @if (!string.IsNullOrWhiteSpace(levelTag))
-                {
-                    <span class="pill-badge me-1">层次：@levelTag</span>
-                }
-            }
-        </span>
     </div>
     <div class="card-body">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label small text-muted">关键词</label>
-                <input class="form-control" placeholder="名称 / 简称，如 \"大学\" / \"工大\"" @bind="keyword" />
+        <div class="ky-filter-form">
+            <div class="ky-filter-field">
+                <label class="form-label" for="school-keyword">关键词</label>
+                <input id="school-keyword" class="form-control" placeholder="院校名称或简称，如 清华大学" @bind="keyword" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted">省份</label>
-                <input class="form-control" placeholder="如 北京、江苏" @bind="province" />
+            <div class="ky-filter-field">
+                <label class="form-label" for="school-province">省份</label>
+                <input id="school-province" class="form-control" placeholder="如 北京、江苏" @bind="province" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted">层次标签</label>
-                <input class="form-control" placeholder="如 985 / 211 / 双一流" @bind="levelTag" />
+            <div class="ky-filter-field">
+                <label class="form-label" for="school-level">层次标签</label>
+                <input id="school-level" class="form-control" placeholder="如 985、211、双一流" @bind="levelTag" />
             </div>
-            <div class="col-md-2 d-grid">
-                <button class="btn btn-primary" @onclick="LoadSchools" disabled="@loading">
+            <div class="ky-filter-actions">
+                <button type="button" class="btn btn-primary btn-ky" @onclick="LoadSchools" disabled="@loading">
                     @(loading ? "查询中..." : "开始查询")
                 </button>
             </div>
@@ -65,8 +40,8 @@
     </div>
 </div>
 
-<div class="row g-3">
-    <div class="col-md-6">
+<div class="schools-split-row">
+    <div class="schools-split-list">
         <div class="card card-soft h-100">
             <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
                 <div>
@@ -83,7 +58,11 @@
                 }
                 else if (schools is null || !schools.Any())
                 {
-                    <div class="p-3 text-muted">暂无数据，请调整筛选条件后重试。</div>
+                    <div class="ky-empty-state">
+                        <span class="bi bi-building ky-empty-state-icon" aria-hidden="true"></span>
+                        <p class="ky-empty-state-title">未找到院校</p>
+                        <p class="ky-empty-state-hint">请调整筛选条件后重新查询。</p>
+                    </div>
                 }
                 else
                 {
@@ -101,7 +80,7 @@
                                         <div class="text-muted small">@s.Province / @s.City</div>
                                     </div>
                                     <div class="text-end small">
-                                        <div><span class="pill-badge pill-badge-muted">@s.LevelTag</span></div>
+                                        <div><span class="pill-badge pill-level-985">@s.LevelTag</span></div>
                                         <div class="text-muted mt-1">@s.Type · @s.Property</div>
                                     </div>
                                 </div>
@@ -112,7 +91,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="schools-split-detail">
         <div class="card card-soft h-100">
             <div class="card-header card-soft-header">
                 <strong>院校详情</strong>
@@ -120,7 +99,11 @@
             <div class="card-body">
                 @if (selected is null)
                 {
-                    <p class="text-muted mb-0">在左侧列表中选择一所院校，这里将展示其详细信息与官网链接。</p>
+                    <div class="ky-empty-state py-4">
+                        <span class="bi bi-arrow-left-circle ky-empty-state-icon" aria-hidden="true"></span>
+                        <p class="ky-empty-state-title">选择一所院校</p>
+                        <p class="ky-empty-state-hint">点击左侧列表中的院校，此处将展示详细信息与官网链接。</p>
+                    </div>
                 }
                 else
                 {
@@ -129,7 +112,7 @@
                     </h5>
                     <p class="text-muted small mb-3">@selected.Province / @selected.City</p>
                     <p class="card-text mb-1">
-                        <span class="pill-badge me-1">@selected.LevelTag</span>
+                        <span class="pill-badge pill-level-985 me-1">@selected.LevelTag</span>
                         <span class="pill-badge pill-badge-muted me-1">@selected.Type</span>
                         <span class="pill-badge pill-badge-muted">@selected.Property</span>
                     </p>

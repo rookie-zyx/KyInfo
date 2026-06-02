@@ -1,0 +1,458 @@
+@page "/discussions/{Id:int}"
+@using KyInfo.Blazor.ApiClient
+@using KyInfo.Blazor.Components.Discussions
+@using KyInfo.Contracts.Discussions
+@inject DiscussionsApiClient DiscussionsApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject KyInfo.Blazor.Auth.TokenStore TokenStore
+
+<PageTitle>@(detail?.Title ?? "讨论详情")</PageTitle>
+
+<RequireLogin>
+<section class="discussions-page discussion-detail-page">
+    @if (loading)
+    {
+        <div class="discussion-state-block">讨论详情加载中…</div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage) && detail is null)
+    {
+        <nav class="discussion-detail-nav">
+            <button type="button" class="discussion-back-link" @onclick="BackToList">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                <span>返回讨论区</span>
+            </button>
+        </nav>
+        <div class="alert alert-danger discussion-alert" role="alert">@errorMessage</div>
+    }
+    else if (detail is not null)
+    {
+        <nav class="discussion-detail-nav">
+            <button type="button" class="discussion-back-link" @onclick="BackToList">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                <span>返回讨论区</span>
+            </button>
+        </nav>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-success discussion-alert" role="status">@statusMessage</div>
+        }
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger discussion-alert" role="alert">@errorMessage</div>
+        }
+
+        <article class="discussion-detail-post">
+            <div class="discussion-detail-post-head">
+                <div class="discussion-post-avatar" aria-hidden="true">@GetAuthorGlyph(detail.AuthorUserName)</div>
+                <div class="discussion-detail-post-head-text">
+                    <h1 class="discussion-detail-title">@detail.Title</h1>
+                    <div class="discussion-post-meta">
+                        <span class="discussion-post-meta-item">
+                            <i class="bi bi-person" aria-hidden="true"></i>
+                            @detail.AuthorUserName
+                        </span>
+                        <span class="discussion-post-meta-item">
+                            @FormatDateTime(detail.CreatedAt)
+                        </span>
+                        @if (detail.UpdatedAt.HasValue)
+                        {
+                            <span class="discussion-post-meta-item">
+                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                更新于 @FormatDateTime(detail.UpdatedAt.Value)
+                            </span>
+                        }
+                    </div>
+                </div>
+                @if (CanDeleteDiscussion)
+                {
+                    <button type="button"
+                            class="discussion-danger-outline-btn"
+                            @onclick="DeleteDiscussion"
+                            disabled="@busy"
+                            aria-label="删除讨论">
+                        <i class="bi bi-trash3" aria-hidden="true"></i>
+                        <span class="discussion-danger-outline-label">删除</span>
+                    </button>
+                }
+            </div>
+            <div class="discussion-detail-post-body">
+                <RichContentView Content="@detail.Content" />
+            </div>
+        </article>
+
+        <section class="discussion-detail-comments" aria-labelledby="comments-heading">
+            <h2 id="comments-heading" class="discussion-detail-section-title">
+                <i class="bi bi-chat-left-text" aria-hidden="true"></i>
+                <span>@detail.Comments.Count 条回复</span>
+            </h2>
+
+            @if (detail.Comments.Count == 0)
+            {
+                <div class="discussion-comments-empty">
+                    <p>还没有评论，写下第一条回复吧。</p>
+                    <button type="button" class="discussion-reply-trigger-btn" @onclick="OpenReplyAsync">
+                        <i class="bi bi-reply" aria-hidden="true"></i>
+                        <span>写评论</span>
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="discussion-comment-list">
+                    @foreach (var comment in detail.Comments)
+                    {
+                        <article class="discussion-comment-card">
+                            <div class="discussion-post-avatar" aria-hidden="true">@GetAuthorGlyph(comment.AuthorUserName)</div>
+                            <div class="discussion-comment-body">
+                                <div class="discussion-comment-head">
+                                    <div class="discussion-post-meta">
+                                        <span class="discussion-post-meta-item discussion-comment-author">
+                                            @comment.AuthorUserName
+                                        </span>
+                                        <span class="discussion-post-meta-item">
+                                            @FormatDateTime(comment.CreatedAt)
+                                        </span>
+                                        <span class="discussion-post-meta-item">
+                                            @GetRelativeTime(comment.CreatedAt)
+                                        </span>
+                                    </div>
+                                    @if (CanDeleteComment(comment))
+                                    {
+                                        <button type="button"
+                                                class="discussion-inline-action"
+                                                @onclick="() => DeleteComment(comment.Id)"
+                                                disabled="@busy">
+                                            删除
+                                        </button>
+                                    }
+                                </div>
+                                <div class="discussion-comment-content">
+                                    <RichContentView Content="@comment.Content" />
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        @if (!mobileReplyUi)
+        {
+            <section class="discussion-reply-card" aria-labelledby="reply-heading">
+                <h2 id="reply-heading" class="discussion-detail-section-title">
+                    <i class="bi bi-reply" aria-hidden="true"></i>
+                    <span>写评论</span>
+                </h2>
+                @ReplyFormContent
+            </section>
+        }
+        else
+        {
+            <button type="button"
+                    class="discussion-fab discussion-fab-mobile discussion-reply-fab"
+                    aria-label="写评论"
+                    title="写评论"
+                    @onclick="OpenReplyAsync">
+                <i class="bi bi-reply" aria-hidden="true"></i>
+            </button>
+
+            @if (replyOpen)
+            {
+                <div class="discussion-composer-backdrop" @onclick="CloseReply"></div>
+                <div class="discussion-composer-dialog discussion-reply-dialog"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="reply-dialog-title">
+                    <div class="discussion-composer-dialog-head">
+                        <h2 id="reply-dialog-title">写评论</h2>
+                        <button type="button" class="discussion-composer-close" aria-label="关闭" @onclick="CloseReply">
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    @ReplyFormContent
+                </div>
+            }
+        }
+    }
+</section>
+</RequireLogin>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private DiscussionDetailDto? detail;
+    private List<StickerDto> stickers = new();
+    private string commentContent = string.Empty;
+    private bool loading = true;
+    private bool busy;
+    private bool replyOpen;
+    private bool mobileReplyUi;
+    private string? statusMessage;
+    private string? errorMessage;
+    private string? currentAccessToken;
+
+    private bool CanDeleteDiscussion =>
+        detail is not null && (detail.AuthorUserId == TokenStore.UserId || IsStaff);
+
+    private bool IsStaff =>
+        string.Equals(TokenStore.Role, "Admin", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(TokenStore.Role, "Root", StringComparison.OrdinalIgnoreCase);
+
+    private bool CanDeleteComment(DiscussionCommentDto comment) =>
+        comment.AuthorUserId == TokenStore.UserId || IsStaff;
+
+    protected override async Task OnInitializedAsync()
+    {
+        stickers = await DiscussionsApi.GetStickersAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadDetail();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                mobileReplyUi = await JS.InvokeAsync<bool>(
+                    "eval",
+                    "window.matchMedia('(max-width: 767.98px)').matches");
+                StateHasChanged();
+            }
+            catch
+            {
+                // ignore viewport detection errors
+            }
+        }
+    }
+
+    private RenderFragment ReplyFormContent => __builder =>
+    {
+        <div class="discussion-reply-fields">
+            <div class="discussion-composer-textarea-wrap">
+                <textarea class="form-control discussion-composer-textarea discussion-reply-textarea"
+                          @bind="commentContent"
+                          maxlength="2000"
+                          placeholder="补充你的经验、质疑或者资料来源…"
+                          disabled="@busy"></textarea>
+                <div class="discussion-composer-textarea-bar">
+                    <StickerPicker Stickers="stickers" OnPick="InsertCommentSticker" Disabled="@busy" />
+                    <span class="discussion-composer-count" aria-live="polite">@commentContent.Length / 2000</span>
+                </div>
+            </div>
+
+            <div class="discussion-composer-footer">
+                @if (replyOpen)
+                {
+                    <button type="button" class="ky-btn ky-btn-outline" @onclick="CloseReply" disabled="@busy">取消</button>
+                }
+                <button type="button" class="ky-btn discussion-composer-submit" @onclick="SubmitComment" disabled="@busy">
+                    <i class="bi bi-send" aria-hidden="true"></i>
+                    <span>@(busy ? "发送中…" : "发表评论")</span>
+                </button>
+            </div>
+        </div>
+    };
+
+    private async Task LoadDetail()
+    {
+        loading = true;
+        errorMessage = null;
+        try
+        {
+            var token = await RequireAccessTokenAsync();
+            detail = await DiscussionsApi.GetByIdAsync(Id, token);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            detail = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SubmitComment()
+    {
+        busy = true;
+        statusMessage = null;
+        errorMessage = null;
+        try
+        {
+            var token = await RequireAccessTokenAsync();
+            await DiscussionsApi.CreateCommentAsync(Id, new DiscussionCommentCreateDto { Content = commentContent }, token);
+            commentContent = string.Empty;
+            statusMessage = "评论已发布";
+            replyOpen = false;
+            await LoadDetail();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private Task InsertCommentSticker(string code)
+    {
+        commentContent += $" [s:{code}]";
+        return Task.CompletedTask;
+    }
+
+    private async Task DeleteDiscussion()
+    {
+        busy = true;
+        errorMessage = null;
+        try
+        {
+            var token = await RequireAccessTokenAsync();
+            await DiscussionsApi.DeleteDiscussionAsync(Id, token);
+            Navigation.NavigateTo("/discussions");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteComment(int commentId)
+    {
+        busy = true;
+        errorMessage = null;
+        try
+        {
+            var token = await RequireAccessTokenAsync();
+            await DiscussionsApi.DeleteCommentAsync(commentId, token);
+            statusMessage = "评论已删除";
+            await LoadDetail();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void BackToList() => Navigation.NavigateTo("/discussions");
+
+    private async Task OpenReplyAsync()
+    {
+        if (mobileReplyUi)
+        {
+            replyOpen = true;
+            await Task.Yield();
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "eval",
+                    "document.querySelector('.discussion-reply-dialog .discussion-reply-textarea')?.focus()");
+            }
+            catch
+            {
+                // ignore focus errors
+            }
+
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "eval",
+                "const el = document.querySelector('.discussion-reply-card .discussion-reply-textarea'); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.focus();");
+        }
+        catch
+        {
+            // ignore focus errors
+        }
+    }
+
+    private void CloseReply() => replyOpen = false;
+
+    private async Task<string?> GetAccessTokenAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(currentAccessToken))
+        {
+            return currentAccessToken;
+        }
+
+        var auth = await JS.InvokeAsync<KyInfo.Blazor.Auth.BrowserAuthResult>("kyinfoAuth.getSession");
+        if (auth.Session?.IsAuthenticated != true || string.IsNullOrWhiteSpace(auth.Session.Token))
+        {
+            currentAccessToken = null;
+            return null;
+        }
+
+        currentAccessToken = auth.Session.Token;
+        TokenStore.SetAuthenticated(
+            auth.Session.Token,
+            auth.Session.UserName,
+            auth.Session.Role,
+            auth.Session.UserId);
+        return currentAccessToken;
+    }
+
+    private async Task<string> RequireAccessTokenAsync()
+    {
+        var token = await GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new ApiException(System.Net.HttpStatusCode.Unauthorized, "登录状态已失效，请重新登录后再试。");
+        }
+
+        return token;
+    }
+
+    private static string FormatDateTime(DateTime createdAt) =>
+        createdAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    private static string GetAuthorGlyph(string userName)
+    {
+        var ch = userName.Trim().FirstOrDefault(c => !char.IsWhiteSpace(c));
+        return ch == default ? "研" : ch.ToString().ToUpperInvariant();
+    }
+
+    private static string GetRelativeTime(DateTime createdAt)
+    {
+        var span = DateTime.Now - createdAt.ToLocalTime();
+        if (span.TotalMinutes < 1)
+        {
+            return "刚刚";
+        }
+
+        if (span.TotalHours < 1)
+        {
+            return $"{Math.Max(1, (int)span.TotalMinutes)} 分钟前";
+        }
+
+        if (span.TotalDays < 1)
+        {
+            return $"{Math.Max(1, (int)span.TotalHours)} 小时前";
+        }
+
+        if (span.TotalDays < 7)
+        {
+            return $"{Math.Max(1, (int)span.TotalDays)} 天前";
+        }
+
+        return "更早";
+    }
+}

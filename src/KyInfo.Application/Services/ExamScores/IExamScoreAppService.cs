@@ -13,6 +13,10 @@ public interface IExamScoreAppService
 
     Task<ExamScoreDetailDto> GetByIdAsync(int id, CancellationToken cancellationToken);
 
-    Task<int> CreateAsync(ExamScoreCreateDto dto, CancellationToken cancellationToken);
+    Task<int> CreateAsync(
+        ExamScoreCreateDto dto,
+        int actorUserId,
+        string actorRole,
+        CancellationToken cancellationToken);
 }
 

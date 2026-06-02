@@ -11,8 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\\KyInfo.Contracts\\KyInfo.Contracts.csproj" />
-    <ProjectReference Include="..\\KyInfo.Domain\\KyInfo.Domain.csproj" />
+    <ProjectReference Include="../KyInfo.Contracts/KyInfo.Contracts.csproj" />
+    <ProjectReference Include="../KyInfo.Domain/KyInfo.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>

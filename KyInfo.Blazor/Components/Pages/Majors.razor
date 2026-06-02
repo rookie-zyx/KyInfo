@@ -49,7 +49,7 @@
                 <input class="form-control" placeholder="限定某一院校" @bind="schoolIdText" />
             </div>
             <div class="col-md-2 d-grid">
-                <button class="btn btn-primary" @onclick="LoadMajors" disabled="@loading">
+                <button class="btn btn-primary btn-ky" @onclick="LoadMajors" disabled="@loading">
                     @(loading ? "查询中..." : "开始查询")
                 </button>
             </div>

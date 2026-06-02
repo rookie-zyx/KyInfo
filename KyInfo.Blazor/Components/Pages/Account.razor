@@ -14,11 +14,8 @@
     <div class="section-header">
         <div class="section-header-title">
             <h1>我的档案</h1>
-            <span class="pill-badge">账号与成绩一体化</span>
         </div>
-        <div class="text-muted small section-tagline">
-            在一个模块内查看并更新账号信息，同时维护当前账号关联的考研成绩。
-        </div>
+        <p class="section-tagline mb-0">查看并更新账号信息，维护当前账号关联的考研成绩。</p>
     </div>
 
     @if (!string.IsNullOrEmpty(bannerError))
@@ -43,31 +40,36 @@
         <div class="row g-3">
             <div class="col-lg-6">
                 <div class="card card-soft h-100">
-                    <div class="card-header card-soft-header">
+                    <div class="card-header card-soft-header profile-card-header">
                         <strong>基本资料</strong>
+                        @if (profile is not null)
+                        {
+                            <span class="pill-badge pill-badge-muted">@profile.Role</span>
+                        }
                     </div>
                     <div class="card-body">
-                        <div class="mb-2 text-muted small">注册时间（UTC）：@profile.CreatedAt.ToString("yyyy-MM-dd HH:mm")</div>
-                        <div class="mb-2 text-muted small">角色：<span class="pill-badge pill-badge-muted">@profile.Role</span></div>
+                        <div class="mb-2 text-muted small">注册时间（UTC）：@profile!.CreatedAt.ToString("yyyy-MM-dd HH:mm")</div>
                         @if (IsRootProfile)
                         {
                             <p class="small text-muted">Root 账号的用户名与邮箱不可修改，仅可在右侧修改密码。</p>
                         }
                         <div class="mb-3">
-                            <label class="form-label small text-muted">用户名</label>
-                            <input class="form-control" @bind="editUserName" @bind:event="oninput" maxlength="64" disabled="@IsRootProfile" />
+                            <label class="form-label" for="account-username">用户名</label>
+                            <input id="account-username" class="form-control" @bind="editUserName" @bind:event="oninput" maxlength="64" disabled="@IsRootProfile" />
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small text-muted">邮箱</label>
-                            <input class="form-control" type="email" @bind="editEmail" @bind:event="oninput" maxlength="256" disabled="@IsRootProfile" />
+                            <label class="form-label" for="account-email">邮箱</label>
+                            <input id="account-email" class="form-control" type="email" @bind="editEmail" @bind:event="oninput" maxlength="256" disabled="@IsRootProfile" />
                         </div>
-                        <button type="button" class="btn btn-primary" disabled="@(savingProfile || IsRootProfile)" @onclick="SaveProfileAsync">
-                            @(savingProfile ? "保存中…" : "保存资料")
-                        </button>
-                        @if (!string.IsNullOrEmpty(profileMessage))
-                        {
-                            <span class="ms-2 small @(profileOk ? "text-success" : "text-danger")">@profileMessage</span>
-                        }
+                        <div class="profile-form-footer ky-btn-group-responsive align-items-center">
+                            @if (!string.IsNullOrEmpty(profileMessage))
+                            {
+                                <span class="small me-auto @(profileOk ? "text-success" : "text-danger")">@profileMessage</span>
+                            }
+                            <button type="button" class="btn btn-primary btn-ky" disabled="@(savingProfile || IsRootProfile)" @onclick="SaveProfileAsync">
+                                @(savingProfile ? "保存中…" : "保存资料")
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -78,16 +80,31 @@
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label class="form-label small text-muted">当前密码</label>
-                            <input class="form-control" type="password" autocomplete="current-password" @bind="currentPassword" @bind:event="oninput" />
+                            <label class="form-label" for="account-current-pwd">当前密码</label>
+                            <div class="ky-password-field">
+                                <input id="account-current-pwd" class="form-control" type="@(showCurrentPassword ? "text" : "password")" autocomplete="current-password" @bind="currentPassword" @bind:event="oninput" />
+                                <button type="button" class="ky-password-toggle" aria-label="@(showCurrentPassword ? "隐藏密码" : "显示密码")" @onclick="() => showCurrentPassword = !showCurrentPassword">
+                                    <span class="bi @(showCurrentPassword ? "bi-eye-slash" : "bi-eye")" aria-hidden="true"></span>
+                                </button>
+                            </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small text-muted">新密码（至少 6 位）</label>
-                            <input class="form-control" type="password" autocomplete="new-password" @bind="newPassword" @bind:event="oninput" />
+                            <label class="form-label" for="account-new-pwd">新密码（至少 6 位）</label>
+                            <div class="ky-password-field">
+                                <input id="account-new-pwd" class="form-control" type="@(showNewPassword ? "text" : "password")" autocomplete="new-password" @bind="newPassword" @bind:event="oninput" />
+                                <button type="button" class="ky-password-toggle" aria-label="@(showNewPassword ? "隐藏密码" : "显示密码")" @onclick="() => showNewPassword = !showNewPassword">
+                                    <span class="bi @(showNewPassword ? "bi-eye-slash" : "bi-eye")" aria-hidden="true"></span>
+                                </button>
+                            </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small text-muted">确认新密码</label>
-                            <input class="form-control" type="password" autocomplete="new-password" @bind="confirmPassword" @bind:event="oninput" />
+                            <label class="form-label" for="account-confirm-pwd">确认新密码</label>
+                            <div class="ky-password-field">
+                                <input id="account-confirm-pwd" class="form-control" type="@(showConfirmPassword ? "text" : "password")" autocomplete="new-password" @bind="confirmPassword" @bind:event="oninput" />
+                                <button type="button" class="ky-password-toggle" aria-label="@(showConfirmPassword ? "隐藏密码" : "显示密码")" @onclick="() => showConfirmPassword = !showConfirmPassword">
+                                    <span class="bi @(showConfirmPassword ? "bi-eye-slash" : "bi-eye")" aria-hidden="true"></span>
+                                </button>
+                            </div>
                         </div>
                         <button type="button" class="btn btn-outline-primary" disabled="@savingPassword" @onclick="ChangePasswordAsync">
                             @(savingPassword ? "提交中…" : "更新密码")
@@ -111,7 +128,7 @@
                                    style="width: 120px;"
                                    placeholder="年份筛选"
                                    @bind="scoreYearText" />
-                            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@loadingScores" @onclick="ReloadScoresAsync">
+                            <button type="button" class="btn btn-outline-secondary btn-ky" disabled="@loadingScores" @onclick="ReloadScoresAsync">
                                 @(loadingScores ? "加载中…" : "刷新")
                             </button>
                         </div>
@@ -139,7 +156,7 @@
                             </div>
                         </div>
                         <div class="mb-3 d-flex align-items-center gap-2">
-                            <button type="button" class="btn btn-sm btn-success" disabled="@savingScore" @onclick="CreateScoreAsync">
+                            <button type="button" class="btn btn-primary btn-ky" disabled="@savingScore" @onclick="CreateScoreAsync">
                                 @(savingScore ? "保存中…" : "新增成绩")
                             </button>
                             @if (!string.IsNullOrWhiteSpace(scoreMessage))
@@ -200,6 +217,9 @@
     private string currentPassword = string.Empty;
     private string newPassword = string.Empty;
     private string confirmPassword = string.Empty;
+    private bool showCurrentPassword;
+    private bool showNewPassword;
+    private bool showConfirmPassword;
 
     private bool loadingProfile = true;
     private string? loadError;

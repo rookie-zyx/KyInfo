@@ -9,51 +9,35 @@
 <div class="section-header">
     <div class="section-header-title">
         <h1>智能志愿推荐</h1>
-        <span class="pill-badge">基于分数线的冲刺 / 匹配 / 保底分层推荐</span>
     </div>
-    <div class="text-muted small section-tagline">
-        选择用户与年份，系统根据历史分数线自动计算与你分数差距，生成分档志愿清单。
-    </div>
+    <p class="section-tagline mb-0">基于分数线的冲刺 / 匹配 / 保底分层推荐，选择用户与年份后生成志愿清单。</p>
 </div>
 
 <div class="card card-soft mb-3">
-    <div class="card-header card-soft-header d-flex justify-content-between align-items-center">
-        <div>
-            <strong>推荐条件</strong>
-            <span class="ms-2 text-muted small">
-                当前档位过滤：
-                @if (string.IsNullOrEmpty(filterLevel))
-                {
-                    <span class="pill-badge pill-badge-muted">全部档位</span>
-                }
-                else
-                {
-                    <span class="pill-badge">@filterLevel</span>
-                }
-            </span>
-        </div>
+    <div class="card-header card-soft-header">
+        <strong>推荐条件</strong>
     </div>
     <div class="card-body">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small text-muted">用户 Id</label>
-                <input class="form-control" placeholder="输入已录入成绩的用户 Id" @bind="userIdText" />
+        <div class="ky-filter-grid-4">
+            <div>
+                <label class="form-label" for="rec-user-id">用户 ID</label>
+                <input id="rec-user-id" class="form-control" placeholder="请输入用户 ID" @bind="userIdText" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted">年份（可选）</label>
-                <input class="form-control" placeholder="留空则自动取最近一年" @bind="yearText" />
+            <div>
+                <label class="form-label" for="rec-year">年份（可选）</label>
+                <input id="rec-year" class="form-control" placeholder="留空则自动取最近一年" @bind="yearText" />
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted">志愿档位</label>
-                <select class="form-control" @bind="filterLevel">
+            <div>
+                <label class="form-label" for="rec-level">志愿档位</label>
+                <select id="rec-level" class="form-select" @bind="filterLevel">
                     <option value="">全部档位</option>
                     <option value="冲刺">冲刺</option>
                     <option value="匹配">匹配</option>
                     <option value="保底">保底</option>
                 </select>
             </div>
-            <div class="col-md-3 d-grid">
-                <button class="btn btn-primary" @onclick="Load" disabled="@loading">
+            <div>
+                <button type="button" class="btn btn-primary btn-ky w-100" @onclick="Load" disabled="@loading">
                     @(loading ? "计算中..." : "生成推荐")
                 </button>
             </div>
@@ -67,15 +51,23 @@
 
 @if (result is null && !loading)
 {
-    <p class="text-muted">请输入用户 Id，并点击“生成推荐”。系统将根据该用户的总分与各院校专业的分数线，生成冲刺 / 匹配 / 保底建议清单。</p>
+    <div class="ky-empty-state">
+        <span class="bi bi-stars ky-empty-state-icon" aria-hidden="true"></span>
+        <p class="ky-empty-state-title">尚未生成推荐</p>
+        <p class="ky-empty-state-hint">输入用户 ID 并点击「生成推荐」，系统将按分数线计算冲刺 / 匹配 / 保底志愿。</p>
+    </div>
 }
 else if (loading)
 {
-    <p>正在根据你的分数和分数线智能匹配志愿，请稍候...</p>
+    <div class="ky-skeleton" style="min-height: 8rem;" aria-label="正在计算推荐"></div>
 }
 else if (result is not null && (result.Items is null || !result.Items.Any()))
 {
-    <p>暂时没有可推荐的志愿，请检查是否已录入成绩和分数线。</p>
+    <div class="ky-empty-state">
+        <span class="bi bi-inbox ky-empty-state-icon" aria-hidden="true"></span>
+        <p class="ky-empty-state-title">暂无可推荐志愿</p>
+        <p class="ky-empty-state-hint">请确认该用户已录入成绩，且系统中有对应分数线数据。</p>
+    </div>
 }
 else if (result is not null)
 {

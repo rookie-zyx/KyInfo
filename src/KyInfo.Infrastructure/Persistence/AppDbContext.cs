@@ -22,6 +22,10 @@ public class AppDbContext : DbContext
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<Discussion> Discussions => Set<Discussion>();
+
+    public DbSet<DiscussionComment> DiscussionComments => Set<DiscussionComment>();
+
     public DbSet<RatingSubject> RatingSubjects => Set<RatingSubject>();
 
     public DbSet<UserRating> UserRatings => Set<UserRating>();
@@ -128,6 +132,34 @@ public class AppDbContext : DbContext
             entity.Property(x => x.Action).HasMaxLength(128);
             entity.Property(x => x.ResourceType).HasMaxLength(64);
             entity.Property(x => x.Summary).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<Discussion>(entity =>
+        {
+            entity.HasIndex(x => x.CreatedAt);
+            entity.Property(x => x.Title).HasMaxLength(200);
+            entity.Property(x => x.Content).HasMaxLength(4000);
+
+            entity.HasOne(x => x.Author)
+                  .WithMany()
+                  .HasForeignKey(x => x.AuthorUserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DiscussionComment>(entity =>
+        {
+            entity.HasIndex(x => new { x.DiscussionId, x.CreatedAt });
+            entity.Property(x => x.Content).HasMaxLength(2000);
+
+            entity.HasOne(x => x.Discussion)
+                  .WithMany(d => d.Comments)
+                  .HasForeignKey(x => x.DiscussionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Author)
+                  .WithMany()
+                  .HasForeignKey(x => x.AuthorUserId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<RatingSubject>(entity =>

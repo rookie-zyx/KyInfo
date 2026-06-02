@@ -419,6 +419,8 @@ public class AdminAppService : IAdminAppService
                 "表头必须包含：用户Id（或 UserId）、年份（或 Year）、总分（或 TotalScore）。");
         }
 
+        var actorRoleImport = await GetActorRoleStringAsync(actorUserId, cancellationToken);
+
         var colPol = FindColumn(headerMap, "政治", "politicsscore");
         var colEn = FindColumn(headerMap, "英语", "englishscore");
         var colMath = FindColumn(headerMap, "数学", "mathscore");
@@ -476,7 +478,7 @@ public class AdminAppService : IAdminAppService
 
             try
             {
-                await _examScoreAppService.CreateAsync(dto, cancellationToken);
+                await _examScoreAppService.CreateAsync(dto, actorUserId, actorRoleImport, cancellationToken);
                 result.SuccessCount++;
             }
             catch (ArgumentException ex)
@@ -485,7 +487,6 @@ public class AdminAppService : IAdminAppService
             }
         }
 
-        var actorRoleImport = await GetActorRoleStringAsync(actorUserId, cancellationToken);
         await _auditLogRepository.AddAsync(
             actorUserId,
             actorRoleImport,

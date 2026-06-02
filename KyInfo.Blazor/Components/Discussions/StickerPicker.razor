@@ -1,0 +1,61 @@
+@using KyInfo.Contracts.Discussions
+
+<div class="sticker-picker">
+    <button type="button"
+            class="sticker-picker-trigger"
+            aria-expanded="@pickerOpen"
+            aria-haspopup="dialog"
+            disabled="@Disabled"
+            @onclick="TogglePicker">
+        <i class="bi bi-emoji-smile" aria-hidden="true"></i>
+        <span>表情</span>
+    </button>
+
+    @if (pickerOpen)
+    {
+        <div class="sticker-picker-popover" role="dialog" aria-label="选择表情">
+            <div class="sticker-picker-grid">
+                @foreach (var sticker in Stickers)
+                {
+                    <button type="button"
+                            class="sticker-picker-btn"
+                            title="@sticker.Label"
+                            aria-label="@sticker.Label"
+                            disabled="@Disabled"
+                            @onclick="() => PickAsync(sticker.Code)">
+                        <img src="@sticker.Url" alt="" loading="lazy" />
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<StickerDto> Stickers { get; set; } = Array.Empty<StickerDto>();
+
+    [Parameter]
+    public EventCallback<string> OnPick { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    private bool pickerOpen;
+
+    private void TogglePicker()
+    {
+        if (Disabled)
+        {
+            return;
+        }
+
+        pickerOpen = !pickerOpen;
+    }
+
+    private async Task PickAsync(string code)
+    {
+        pickerOpen = false;
+        await OnPick.InvokeAsync(code);
+    }
+}

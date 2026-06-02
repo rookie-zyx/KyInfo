@@ -26,6 +26,8 @@ public interface IScoreLineRepository
         int? schoolId,
         int? majorId,
         bool? isNational,
+        string? schoolName,
+        string? majorName,
         CancellationToken cancellationToken);
 }
 

@@ -202,9 +202,13 @@
         {
             errorMessage = ex.Message;
         }
-        catch
+        catch (HttpRequestException ex)
         {
-            errorMessage = "登录过程中发生错误，请稍后重试。";
+            errorMessage = $"无法连接后端 API，请确认 KyInfo.Api 已启动（{ex.Message}）";
+        }
+        catch (Exception ex) when (ex is not ApiException)
+        {
+            errorMessage = $"登录过程中发生错误：{ex.Message}";
         }
         finally
         {
